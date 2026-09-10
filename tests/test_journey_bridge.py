@@ -7,6 +7,14 @@ def request():
 class JourneyBridge(unittest.TestCase):
     def test_public_envelope_roundtrip(self):
         x=request();self.assertEqual(server.validate_journey_request(x),x)
+    def test_stopped_destination_allows_conversation_without_actions(self):
+        x=request();x['choices']=[]
+        x['observation'].update(phase='at-star',delegated=False,planning=False,landmarks=[],navigation={'distance':12,'speed':0,'target':'none','remaining':0,'calibrationResidual':0})
+        self.assertEqual(server.validate_journey_request(x),x)
+        self.assertIsNone(server.validate_journey_result({'summary':'We are stopped.','actionId':None,'preference':'keep'},x)['actionId'])
+        with self.assertRaises(ValueError):server.validate_journey_result({'summary':'Fly.','actionId':'q1','preference':'keep'},x)
+        x['observation']['delegated']=True
+        with self.assertRaises(ValueError):server.validate_journey_request(x)
     def test_hidden_fields_and_navigation_rejected_before_calibration(self):
         for path,value in [('seed',42),('position',[1,2,3]),('anchorId',88),('home',[0,0,0])]:
             x=request();x['observation'][path]=value
@@ -66,3 +74,15 @@ class JourneyBridge(unittest.TestCase):
         self.assertEqual(server.validate_journey_request(data),data)
         choice['field']['fullTripYears']=-1
         with self.assertRaises(ValueError):server.validate_journey_request(data)
+
+    def test_objective_and_target_identity_are_allowlisted(self):
+        x=request();x['observation'].update(phase='calibrated',landmarks=[],navigation={'distance':12,'speed':.12,'target':'none','remaining':0,'calibrationResidual':0},objective='yolo',selectedAsteroidId='cinder')
+        c=x['choices'][0];c.update(kind='gravity-stop',currentPreview=True,affordable=True,field={'centerShip':[.01,0,0],'duration':1.57,'strength':1,'miss':0,'fullTripFuel':15,'fullTripYears':22,'fullTripCredits':2,'onwardMode':'choose-next'})
+        self.assertEqual(server.validate_journey_request(x),x)
+        x['observation']['selectedAsteroidId']='invented'
+        with self.assertRaises(ValueError):server.validate_journey_request(x)
+        x['observation'].update(objective='explore',selectedAsteroidId=None)
+        c.update(kind='gravity-star');c['field']['onwardMode']='none'
+        self.assertEqual(server.validate_journey_request(x),x)
+        x['observation']['objective']='invented'
+        with self.assertRaises(ValueError):server.validate_journey_request(x)

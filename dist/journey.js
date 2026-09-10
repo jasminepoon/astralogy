@@ -187,6 +187,12 @@ export class Journey {
     this.#truth = { index, p, r };
     this.#state = {
       revision: 0,
+      objective: "home",
+      asteroids: [
+        {id:"cinder",name:"Cinder",offset:[.35,.14],fuel:32,credits:8},
+        {id:"tumble",name:"Tumble",offset:[.65,-.18],fuel:24,credits:6},
+        {id:"oddity",name:"Oddity",offset:[.85,.24],fuel:28,credits:7},
+      ].map(a=>{const h=unit(V.scale(p,-1)),side=unit(V.cross(h,Math.abs(h[1])<.9?[0,1,0]:[1,0,0]));return {id:a.id,name:a.name,position:V.add(p,V.add(V.scale(h,a.offset[0]),V.scale(side,a.offset[1]))),deposit:{fuel:a.fuel,credits:a.credits}};}),
       mode,
       phase: "unknown",
       p,
@@ -211,6 +217,7 @@ export class Journey {
       observations: [],
     };
     if(!this.#state.v.every(Number.isFinite)||this.#state.v.length!==3||V.norm(this.#state.v)>.2)throw Error('Invalid initial velocity');
+    this.#state.destinationStar={id:anchor.id,name:`HIP ${anchor.id}`,cataloguePosition:clone(anchor.p),position:V.add(anchor.p,V.scale(unit(V.sub(p,anchor.p)),.01))};
     this.#state.observations = this.#measure(false);
   }
   #measure(identified) {
@@ -236,6 +243,7 @@ export class Journey {
     const base = {
       revision: s.revision,
       mode: s.mode,
+      objective:s.objective,
       phase: s.phase,
       resources: clone(s.resources),
       spent: clone(s.spent),
@@ -263,9 +271,65 @@ export class Journey {
         homeDistance: V.norm(s.p),
         target: clone(s.target),
         deposit: clone(s.deposit),
+        asteroids: clone(s.asteroids),
+        destinationStar:clone(s.destinationStar),
         anchorId: this.#catalogue[this.#truth.index].id,
       });
     return base;
+  }
+  #boundary(){
+    const s=this.#state;
+    if(!s.calibration||s.phase==='arrived')throw Error('Locate the ship before changing the mission.');
+    if(s.active)throw Error('Interrupt the flight before changing the mission.');
+    if(s.field&&s.time<s.field.until-1e-9)throw Error('The gravity field is still active. Resume to field expiry, then interrupt to change destination.');
+  }
+  #report(a){return {id:a.id,name:a.name,position:clone(a.position),velocity:[0,0,0],radiusKm:100,operationRadiusLy:.003,spinPeriodHours:8,gross:clone(a.deposit),extractionCost:{fuel:3,credits:2,lifetime:2},reportCreditsPaid:a.reportCreditsPaid??0};}
+  // Forecast against a copy: preserve all actual flight, inventory and permission state.
+  missionForecast(){
+    const actual=this.#state;
+    if(!actual.calibration||actual.phase==='arrived')return null;
+    if(actual.field&&actual.time<actual.field.until-1e-9)return {blocked:'Wait for field expiry before changing destination.',targets:[],home:[],dire:false};
+    const priorQuotes=new Map(this.#quotes);
+    this.#state=clone(actual);this.#state.target=null;this.#state.phase='calibrated';
+    const home=[],targets=[];
+    const inspect=(destination)=>{const routes=[];for(const speed of [.02,.025,.04,.065,.07]){try{const q=this.fieldQuote({destination,speed}),a=this.assess(q.id);routes.push({speed,fuel:q.detail.miningComparison?.totalFuelSpent??q.cost.fuel+q.detail.braking,years:q.detail.miningComparison?.totalYears??q.detail.years,...a});}catch{}}return routes;};
+    try{
+      this.#state.objective='home';home.push(...inspect('home'));for(const speed of [.02,.025,.04,.065,.07]){try{const q=this.quote('launch-home',{speed});home.push({kind:q.kind,speed,fuel:q.cost.fuel+q.detail.braking,years:q.detail.years,...this.assess(q.id)});}catch{}}
+      this.#state.objective='yolo';
+      for(const a of actual.asteroids){this.#state.report=this.#report(a);this.#state.deposit=clone(a.deposit);const routes=a.deposit.fuel?inspect('asteroid'):[];targets.push({id:a.id,name:a.name,deposit:clone(a.deposit),routes});}
+    }finally{this.#state=actual;this.#quotes=priorQuotes;}
+    // Dire when no tested full home route fits, or every fitting route leaves <=25% fuel or lifetime allowance.
+    const fits=home.filter(r=>r.affordable),allow=k=>Math.min(actual.resources[k],actual.budget[k]-actual.spent[k]);
+    const dire=!fits.length||fits.every(r=>allow('fuel')-r.fuel<=.25*allow('fuel')||allow('lifetime')-r.years<=.25*allow('lifetime'));
+    return {home,targets,dire,homeFeasible:!!fits.length};
+  }
+  #starDestination(star,from){const delta=V.sub(from,star.p),direction=V.norm(delta)>1e-8?unit(delta):[1,0,0];return {id:star.id,name:`HIP ${star.id}`,cataloguePosition:clone(star.p),position:V.add(star.p,V.scale(direction,.01))};}
+  starForecast(catalogueId=this.#state.destinationStar.id){
+    const actual=this.#state;if(!actual.calibration||actual.phase==='arrived')return [];
+    if(actual.field&&actual.time<actual.field.until-1e-9)return [];
+    const prior=new Map(this.#quotes),routes=[];this.#state=clone(actual);this.#state.target=null;this.#state.phase='calibrated';this.#state.objective='explore';
+    const star=this.#catalogue.find(s=>s.id===catalogueId);if(!star){this.#state=actual;return [];}this.#state.destinationStar=this.#starDestination(star,actual.p);
+    try{for(const speed of [.02,.025,.04,.065,.07]){try{const q=this.fieldQuote({destination:'star',speed});routes.push({speed,fuel:q.cost.fuel+q.detail.braking,years:q.detail.years,...this.assess(q.id)});}catch{}}}finally{this.#state=actual;this.#quotes=prior;}
+    return routes;
+  }
+  chartedSky(){if(!['at-star','arrived'].includes(this.#state.phase))throw Error('Reach a star system or Earth to open the full sky catalogue.');return this.#catalogue.map(s=>({catalogueId:s.id,observationId:this.#lightKeys.get(s.id),bearing:this.shipVector(unit(V.sub(s.p,this.#state.p))),brightness:Math.max(.15,Math.min(1,(7-s.mag)/6))}));}
+  changeObjective(objective,targetId){
+    this.#boundary();const s=this.#state;
+    if(!['home','yolo','explore'].includes(objective))throw Error('Unknown mission objective');
+    let asteroid,star;
+    if(objective==='explore'){star=this.#catalogue.find(s=>s.id===targetId);if(!star)throw Error('Choose a catalogue star.');}
+    if(objective==='yolo'){
+      asteroid=s.asteroids.find(a=>a.id===targetId);
+      if(!asteroid||!asteroid.deposit.fuel)throw Error('Choose an unmined asteroid.');
+      const forecast=this.missionForecast().targets.find(a=>a.id===targetId);
+      if(!forecast.routes.some(r=>r.affordable))throw Error('This asteroid cannot be reached and mined within current resources and spending limits.');
+    }
+    if(star)s.destinationStar=this.#starDestination(star,s.p);
+    s.objective=objective;s.target=null;s.phase='calibrated';s.active=false;s.field=null;
+    if(asteroid){s.report=this.#report(asteroid);s.deposit=clone(asteroid.deposit);}
+    this.#undo=null;
+    s.ledger.push({sequence:s.ledger.length+1,kind:'objective',objective,targetId:asteroid?.id??(objective==='explore'?s.destinationStar.id:'home'),cost:{fuel:0,credits:0,lifetime:0},reward:{fuel:0,credits:0},balance:clone(s.resources),time:s.time});
+    this.#invalidate();return this.view();
   }
   setBudget(budget) {
     const s=this.#state;
@@ -318,7 +382,9 @@ export class Journey {
       return ["brake"];
     }
     if (s.phase === "at-stop" && s.deposit.fuel > 0)
-      return ["extract", "launch-home", "gravity-home"];
+      return s.objective==='yolo'?["extract"]:["extract", "launch-home", "gravity-home"];
+    if(s.objective==='explore')return s.phase==='at-star'?[]:['gravity-star','launch-star'];
+    if(s.objective==='yolo')return s.phase==='mined'?[]:['gravity-stop','launch-stop'];
     return [
       ...(!s.report && s.deposit.fuel > 0 ? ["survey"] : []),
       ...(s.report && s.deposit.fuel > 0 ? ["launch-stop", "gravity-stop"] : []),
@@ -326,7 +392,7 @@ export class Journey {
     ];
   }
   quote(kind, { speed } = {}) {
-    if(kind.startsWith("gravity-"))return this.fieldQuote({destination:kind==="gravity-stop"?"asteroid":"home",speed});
+    if(kind.startsWith("gravity-"))return this.fieldQuote({destination:kind==="gravity-stop"?"asteroid":kind==="gravity-star"?"star":"home",speed});
     const s = this.#state;
     if (!this.options().includes(kind))
       throw Error("Action unavailable in current state");
@@ -359,8 +425,9 @@ export class Journey {
         side = unit(
           V.cross(home, Math.abs(home[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]),
         );
-      const p = V.add(s.p, V.add(V.scale(home, 0.35), V.scale(side, 0.14)));
+      const p = s.asteroids[0].position;
       detail = {
+        id: "cinder", name:"Cinder", reportCreditsPaid:3,
         position: p,
         velocity: [0, 0, 0],
         radiusKm: 100,
@@ -377,7 +444,7 @@ export class Journey {
     }
     if (kind.startsWith("launch-")) {
       const destination =
-          kind === "launch-stop" ? s.report.position : [0, 0, 0],
+          kind === "launch-stop" ? s.report.position : kind==="launch-star"?s.destinationStar.position:[0, 0, 0],
         delta = V.sub(destination, s.p),
         distance = V.norm(delta);
       if (distance < 1e-7) throw Error("Already at target");
@@ -394,7 +461,7 @@ export class Journey {
         throw Error("Insufficient lifetime for this route");
       // Reserve braking at the stop, a minimum onward launch and home braking; mining reward never finances upfront costs.
       const reserve =
-        kind === "launch-stop" ? braking + 3 + 2 * 0.025 * 250 : braking;
+        kind === "launch-stop" ? braking + 3 + (s.objective==='yolo'?0:2 * 0.025 * 250) : braking;
       detail = {
         destination,
         distance,
@@ -412,22 +479,24 @@ export class Journey {
       };
       if (kind === "launch-stop") {
         const onwardYears = V.norm(destination) / speed,
-          totalFuel = cost.fuel + braking + 3 + 2 * speed * 250;
+          totalFuel = cost.fuel + braking + 3 + (s.objective==='yolo'?0:2 * speed * 250);
         detail.miningComparison = {
           totalFuelSpent: totalFuel,
           grossFuel: s.deposit.fuel,
           netFuel: s.deposit.fuel - totalFuel,
-          totalCreditsSpent: 5,
+          totalCreditsSpent: (s.report.reportCreditsPaid??3)+2,
+          futureCreditsSpent:2,
+          reportCreditsPaid:s.report.reportCreditsPaid??3,
           grossCredits: s.deposit.credits,
-          netCredits: s.deposit.credits - 5,
-          totalYears: years + 2 + onwardYears,
+          netCredits: s.deposit.credits - ((s.report.reportCreditsPaid??3)+2),
+          totalYears: years + 2 + (s.objective==='yolo'?0:onwardYears),
         };
       }
       effect = {
         v: velocity,
         gravity: 0,
         target: {
-          name: kind === "launch-stop" ? "asteroid" : "home",
+          name: kind === "launch-stop" ? "asteroid" : kind==="launch-star"?"star":"home",
           p: destination,
           remaining: years,
           speed,
@@ -459,7 +528,7 @@ export class Journey {
       };
       effect = {
         v: [0, 0, 0],
-        phase: s.target.name === "home" ? "arrived" : "at-stop",
+        phase: s.target.name === "home" ? "arrived" : s.target.name==="star"?"at-star":"at-stop",
       };
     }
     if (kind === "extract") {
@@ -479,8 +548,10 @@ export class Journey {
           credits: reward.credits - cost.credits,
         },
         summary:
-          "Two-year extraction from finite polar patch A. Report fee is already spent.",
+          `Two-year extraction from finite ${s.report.name??"asteroid"} patch. ${s.report.reportCreditsPaid??3} report credits already spent.`,
       };
+      detail.targetId=s.report.id;
+      detail.reserve=s.objective==='yolo'?0:2*.025*250;
       effect = { deplete: true };
     }
     const q = {
@@ -582,10 +653,11 @@ export class Journey {
     return {sameState:true,years,initial:{p:[0,0,0],v:rotate(rt,s.v)},attempt:local(original),alternative:local(changed),attemptFuel:a.q.cost.fuel,alternativeFuel:q.cost.fuel,attemptHomeProgress:V.norm(s.p)-V.norm(original.p),alternativeHomeProgress:V.norm(s.p)-V.norm(changed.p)};
   }
   fieldQuote({destination='home',speed,centerShip}={}){
-    const s=this.#state,kind=destination==='asteroid'?'gravity-stop':'gravity-home';
-    if(!s.calibration||s.target||s.phase==='arrived'||(destination==='asteroid'&&(!s.report||!s.deposit.fuel))||!['home','asteroid'].includes(destination))throw Error('Field edit unavailable in current state');
+    const s=this.#state,kind=destination==='asteroid'?'gravity-stop':destination==='star'?'gravity-star':'gravity-home';
+    if(s.objective!=='home'&&destination==='home')throw Error('Use Plot a course home to change the mission first.');
+    if(!s.calibration||s.target||s.phase==='arrived'||(destination==='asteroid'&&(!s.report||!s.deposit.fuel))||!['home','asteroid','star'].includes(destination)||(destination==='star'&&s.objective!=='explore'))throw Error('Field edit unavailable in current state');
     speed??=s.preference==='less-fuel'?.025:s.preference==='faster'?.065:.04;if(!Number.isFinite(speed)||speed<.02||speed>.07)throw Error('Speed outside supported bounds');
-    const target=destination==='asteroid'?s.report.position:[0,0,0],distance=V.norm(V.sub(target,s.p)),coast=Math.max(1,distance/speed-1),duration=FIELD_DURATION;
+    const target=destination==='asteroid'?s.report.position:destination==='star'?s.destinationStar.position:[0,0,0],distance=V.norm(V.sub(target,s.p)),coast=Math.max(1,distance/speed-1),duration=FIELD_DURATION;
     let center=V.add(s.p,V.scale(V.sub(V.sub(target,s.p),s.v),1/(1+coast)));
     const field=c=>({origin:[...s.p],center:[...c],strength:1,radius:.3,start:s.time,until:s.time+duration});
     const shoot=c=>{const end=integrate({...s,gravity:0,field:field(c)},duration);return {...end,error:V.sub(V.add(end.p,V.scale(end.v,coast)),target)};};
@@ -594,12 +666,13 @@ export class Journey {
     if(V.norm(V.sub(center,s.p))>.1)throw Error('Field handle outside 0.1 ly bound');
     const f=field(center),end=shoot(center),closest=closestApproach(end.p,end.v,target),years=duration+closest.years,actualSpeed=V.norm(end.v),braking=actualSpeed*250,cost={fuel:6+V.norm(V.sub(center,s.p))*100,credits:0,lifetime:0};
     const feasible=closest.years>0&&Number.isFinite(years)&&closest.miss<.001&&end.path.every(p=>V.norm(V.sub(p,s.p))<f.radius-.005);
-    const reserve=braking+(destination==='asteroid'?3+2*.025*250:0);
+    const reserve=braking+(destination==='asteroid'?3+(s.objective==='yolo'?0:2*.025*250):0);
     const q={id:`q${++this.#counter}`,revision:s.revision,kind,cost,reward:{fuel:0,credits:0},detail:{destination:target,centerShip:rotate(transpose(this.#truth.r),V.sub(center,s.p)),strength:1,duration,radius:f.radius,years:Number.isFinite(years)&&years>0?years:0,speed:actualSpeed,requestedSpeed:speed,braking,reserve,miss:closest.miss,feasible,gravityBefore:s.gravity,gravityAfter:0,gravityDuration:duration,impulse:[0,0,0],summary:'Move the bounded gravity-well handle. The force bends velocity over 1.571 years; it expires without a corrective impulse. Coast to the measured intercept and brake.'}};
     if(years+2>s.resources.lifetime||years+2>s.budget.lifetime-s.spent.lifetime)q.detail.feasible=false;
-    if(destination==='asteroid'){const totalFuel=cost.fuel+braking+3+2*.025*250;q.detail.miningComparison={totalFuelSpent:totalFuel,grossFuel:s.deposit.fuel,netFuel:s.deposit.fuel-totalFuel,totalCreditsSpent:5,grossCredits:s.deposit.credits,netCredits:s.deposit.credits-5,totalYears:years+2+V.norm(target)/.025};}
+    if(destination==='asteroid'){const totalFuel=cost.fuel+braking+3+(s.objective==='yolo'?0:2*.025*250);q.detail.miningComparison={totalFuelSpent:totalFuel,grossFuel:s.deposit.fuel,netFuel:s.deposit.fuel-totalFuel,totalCreditsSpent:(s.report.reportCreditsPaid??3)+2,futureCreditsSpent:2,reportCreditsPaid:s.report.reportCreditsPaid??3,grossCredits:s.deposit.credits,netCredits:s.deposit.credits-((s.report.reportCreditsPaid??3)+2),totalYears:years+2+(s.objective==='yolo'?0:V.norm(target)/.025)};}
     this.#quotes.set(q.id,{q:clone(q),effect:{field:f,target:{name:destination,p:target,remaining:years,speed:actualSpeed},end}});return clone(q);
   }
+  routePath(){const s=this.#state;if(!s.target)return null;return integrate(s,s.target.remaining).path.map(p=>this.shipVector(V.sub(p,s.p)));}
   fieldTracers(id){const r=this.#quotes.get(id);if(!r||!r.effect.field||r.q.revision!==this.revision)throw Error('Current field quote required');const s=this.#state,rt=transpose(this.#truth.r);return Array.from({length:9},(_,i)=>{const offset=rotate(this.#truth.r,[(i%3-1)*.025,(Math.floor(i/3)-1)*.025,0]);const result=integrate({...s,p:V.add(s.p,offset),v:[0,0,0],field:r.effect.field,gravity:0},FIELD_DURATION);return result.path.map(p=>rotate(rt,V.sub(p,s.p)));});}
   undo(){if(!this.#undo)throw Error('Nothing to undo');const revision=this.revision;this.#state=clone(this.#undo.state);this.#attempt=clone(this.#undo.attempt);this.#state.revision=revision;this.#state.active=false;this.#undo=null;this.#invalidate();return this.view();}
   #validateCost(q){const s=this.#state;
@@ -633,6 +706,8 @@ export class Journey {
     if (!record || record.q.revision !== s.revision)
       throw Error("Stale or already committed quote");
     const { q, effect } = record;
+    const destination=effect.target??s.target;
+    const targetId=q.kind==='extract'?s.report.id:destination?.name==='star'?s.destinationStar.id:destination?.name==='asteroid'?s.report.id:destination?.name==='home'?'home':null;
     if(s.mode==='plan'&&!enterDrive&&!(investigation&&['calibrate','identify','survey'].includes(q.kind)))throw Error('Plan retains previews; Apply & fly before movement');
     if(enterDrive&&!manual)throw Error('Only a reviewed manual action may enter Drive');
     if(!s.active&&!manual&&!(investigation&&['calibrate','identify','survey'].includes(q.kind)))throw Error('Execution is paused');
@@ -654,7 +729,7 @@ export class Journey {
       s.observations = effect.observations;
       s.phase = "calibrated";
     }
-    if (q.kind === "survey") s.report = clone(effect.report);
+    if (q.kind === "survey") {s.report=clone(effect.report);s.asteroids[0].reportCreditsPaid=3;}
     if (q.kind === "experiment") {
       s.v = effect.v;
       s.gravity = effect.gravity;
@@ -677,17 +752,19 @@ export class Journey {
       s.v = effect.v;
       s.phase = effect.phase;
       s.target = null;
-      if (s.phase === "arrived") s.active = false;
+      if (["arrived","at-star"].includes(s.phase)) s.active = false;
       if (s.phase === "arrived" && (V.norm(s.p) > 0.002 || V.norm(s.v) > 1e-5))
         throw Error("Arrival verification failed");
     }
     if (effect.deplete) {
       s.deposit = { fuel: 0, credits: 0 };
+      const asteroid=s.asteroids.find(a=>a.id===s.report.id);if(asteroid)asteroid.deposit=clone(s.deposit);
       s.phase = "mined";
     }
     s.ledger.push({
       sequence: s.ledger.length + 1,
       kind: q.kind,
+      targetId,
       cost: clone(q.cost),
       reward: clone(q.reward),
       balance: clone(s.resources),

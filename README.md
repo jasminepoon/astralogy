@@ -4,14 +4,21 @@
 
 Astralogy is a playable space adventure about what you can understand and do together with AI. Explore an unfamiliar sky, shape your route home, and decide how much fuel and time the journey should cost.
 
-## The experience
+## Play or Demo
 
-1. **Find yourself.** Identify a star and gather measurements to locate your ship.
-2. **Try a different route.** Drag a gravity-field handle and watch the predicted path, fuel, and travel time change.
-3. **Think it through with Astra.** Ask, “Can we use this route and still leave me at least 140 years?” Astra evaluates your actual adjustment against your priorities.
-4. **Hand over the helm.** Let Astra execute the chosen plan, then inspect the arrival and resources remaining.
+**Play** starts in an unknown sky. Identify a star, locate the ship, shape a route, and decide what matters. **Demo** starts with a clearly labeled prepared route so you can immediately drag the gravity grip, ask Astra about your adjustment, and hand over the helm. Other demo scenarios live in the Journey menu.
 
-The central idea is a shared world where your experiment changes the AI's plan. You can see the consequences, question them, and change your mind before committing. Resource stops offer an optional detour when they make sense for your journey.
+The two experiences keep separate state in the current tab. Switching pauses execution, cancels pending replies, and preserves the outgoing journey, conversation, preview and camera. Returning never grants flight authority. Reload starts fresh; there is no saved-game import. New Play journeys retain one previous journey for recovery. Restarting Demo leaves Play untouched.
+
+Plan keeps a free preview. **Take the helm** delegates the reviewed route; **Interrupt** pauses at a checkpoint. Advanced gesture behavior is in Journey. Zoom and Fit route only change the camera.
+
+## Choose the mission
+
+- **Home** is the default. Full-route quotes include braking, and arrival is verified from position and velocity.
+- **Home can wait · YOLO** changes the objective to mining. Choose among three fixed asteroids, preview approach/braking/extraction, collect a finite deposit, and choose again. There is no automatic trip home or renewed spending authority. Recovered inventory can fund explicitly increased spending limits. Plot a course home remains available, without promising it will fit.
+- **Visit a star system** uses actual HIP catalogue identities and directions. Select an identified light or visit the nearby measured system. Travel depths and the 0.01-ly approach offset are simulated. On arrival, browse all 88 constellations and all 5,044 available catalogue stars, or highlight constellation members in the local sky. Complete charts use Earth-reference coordinates; the local sky uses the ship's actual simulated position. No planet ephemerides, landing or orbital dynamics are supplied.
+
+A contextual YOLO invitation appears when every affordable tested home route leaves at most 25% of the available fuel or lifetime allowance, or none fits—and at least one mining target fits upfront. Forecasts test guided field and direct home routes at 0.02, 0.025, 0.04, 0.065 and 0.07 ly/year, including braking. This is a bounded route search, not a proof over every possible trajectory. Objective changes preserve current position, velocity, inventory, time and ledger; an active gravity field must finish before changing destination.
 
 ## Run locally
 
@@ -33,7 +40,7 @@ The server runs locally and keeps authentication out of the browser. Manual cont
 
 Three.js renders the world. A deterministic simulation calculates trajectories, full-trip costs, and arrival checks. Astra receives observations and supported choices through a Python bridge; human and AI adjustments use the same validated controls. Planning previews do not spend fuel or advance journey time. Paid investigations spend credits, and executing a route applies its costs.
 
-This is a fictional navigation game using real star catalogue references with synthetic distances, measurements, and gravity controls. It does not demonstrate real spacecraft navigation or AI discovering physical laws. Game credits and journey years are separate from model usage and real elapsed time.
+Star identities and catalogue directions are real; distances, range/tag measurements, asteroid deposits and gravity controls are game rules. The gravity grip operates a ship-controlled field, not a discovered planet. It does not demonstrate real spacecraft navigation or AI discovering physical laws. Game credits and journey years are separate from model usage and real elapsed time.
 
 ## Checks
 

@@ -46,11 +46,16 @@ keys(o, [
   "landmarks",
   "navigation",
   "asteroid",
-], ["attempt"]);
+], ["attempt","objective","selectedAsteroidId","destinationStarId"]);
+if(o.destinationStarId!==undefined)check(o.destinationStarId===null||Number.isSafeInteger(o.destinationStarId)&&o.destinationStarId>0&&o.destinationStarId<200000);
+if(o.phase==='unknown')check(o.destinationStarId===undefined||o.destinationStarId===null);
+if(o.objective!==undefined)check(['home','yolo','explore'].includes(o.objective));
+if(o.selectedAsteroidId!==undefined)check(o.selectedAsteroidId===null||['cinder','tumble','oddity'].includes(o.selectedAsteroidId));
+if(o.objective==='yolo')check(['cinder','tumble','oddity'].includes(o.selectedAsteroidId));
 check(typeof o.delegated === "boolean");
 if(Object.hasOwn(o,"planning"))check(typeof o.planning === "boolean");
 check(
-  ["unknown", "calibrated", "travel", "at-stop", "mined", "arrived"].includes(
+  ["unknown", "calibrated", "travel", "at-stop", "mined", "at-star", "arrived"].includes(
     o.phase,
   ),
 );
@@ -81,7 +86,7 @@ else {
       num(o.navigation.speed) &&
       num(o.navigation.remaining) &&
       num(o.navigation.calibrationResidual) &&
-      ["none", "home", "asteroid"].includes(o.navigation.target),
+      ["none", "home", "asteroid", "star"].includes(o.navigation.target),
   );
 }
 if (o.asteroid !== null) {
@@ -108,7 +113,7 @@ if (o.asteroid !== null) {
 }
 if(o.attempt!==undefined&&o.attempt!==null){const a=o.attempt;keys(a,['impulse','fuel','years','committed']);check(vec(a.impulse)&&Math.hypot(...a.impulse)<=.020000001&&num(a.fuel)&&num(a.years,0,8)&&typeof a.committed==='boolean');}
 check(
-  Array.isArray(x.choices) && x.choices.length <= 6 && x.choices.length > 0,
+  Array.isArray(x.choices) && x.choices.length <= 6 && (x.choices.length > 0 || (['at-star','mined'].includes(o.phase)&&!o.delegated&&!o.planning)),
 );
 check(x.choices.filter(c=>c.currentPreview===true).length<=1);
 const ids = new Set();
@@ -124,7 +129,7 @@ for (const c of x.choices) {
       "calibrate",
       "survey",
       "launch-stop",
-      "launch-home", "gravity-home", "gravity-stop",
+      "launch-home", "gravity-home", "gravity-stop", "launch-star", "gravity-star",
       "coast",
       "brake",
       "extract",
@@ -138,7 +143,7 @@ for (const c of x.choices) {
       num(c.years) &&
       num(c.reserve),
   );
-  if(c.field!==undefined&&c.field!==null){check(o.phase!=='unknown');const f=c.field;keys(f,['centerShip','duration','strength','miss','fullTripFuel','onwardMode'],['fullTripYears','fullTripCredits']);for(const k of ['fullTripYears','fullTripCredits'])if(f[k]!==undefined)check(num(f[k]));check(vec(f.centerShip)&&Math.hypot(...f.centerShip)<=.100001&&num(f.duration,0,2)&&num(f.strength,0,1)&&num(f.miss)&&num(f.fullTripFuel)&&['none','direct-slow'].includes(f.onwardMode));}
+  if(c.field!==undefined&&c.field!==null){check(o.phase!=='unknown');const f=c.field;keys(f,['centerShip','duration','strength','miss','fullTripFuel','onwardMode'],['fullTripYears','fullTripCredits']);for(const k of ['fullTripYears','fullTripCredits'])if(f[k]!==undefined)check(num(f[k]));check(vec(f.centerShip)&&Math.hypot(...f.centerShip)<=.100001&&num(f.duration,0,2)&&num(f.strength,0,1)&&num(f.miss)&&num(f.fullTripFuel)&&['none','direct-slow','choose-next'].includes(f.onwardMode));}
   if(c.comparison!==undefined&&c.comparison!==null){check(o.phase!=='unknown');const a=c.comparison;keys(a,['years','attemptFuel','alternativeFuel','attemptHomeProgress','alternativeHomeProgress']);check(num(a.years,0,8)&&num(a.attemptFuel)&&num(a.alternativeFuel)&&num(a.attemptHomeProgress,-1e5,1e5)&&num(a.alternativeHomeProgress,-1e5,1e5));}
   const e = c.evidence;
   keys(e, [
