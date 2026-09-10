@@ -1,0 +1,55 @@
+{
+  "model": "gpt-image-2.5-sunburst",
+  "mode": "OpenAI Images API via installed imagegen CLI",
+  "quality": "high",
+  "prompt_file": "prompts.jsonl",
+  "visual_inspection": "All four inspected; no visible text or UI. Actual app integration pending.",
+  "assets": [
+    {
+      "file": "observatory-surround-v1.png",
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGBA",
+      "bytes": 1127525,
+      "sha256": "94d6fe55e0953cbb00cb12e682fed2fb9e5279828420967a8117d20b6f7789f8",
+      "alpha_extrema": [
+        0,
+        254
+      ],
+      "fully_transparent_fraction": 0.8466,
+      "center_alpha": 0,
+      "outer_edge_alpha_max": 254
+    },
+    {
+      "file": "deep-space-dust-v1.png",
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGB",
+      "bytes": 1900252,
+      "sha256": "0fe2b4adf3b4fe08310f0f6d78a6182008552e0a108bbacf70958703b38f4b0f"
+    },
+    {
+      "file": "gravity-dust-wisp-v1.png",
+      "width": 1024,
+      "height": 1024,
+      "mode": "RGBA",
+      "bytes": 1155824,
+      "sha256": "ba4813bd3f1d31c1f168ab7e3c1f77b8b844ec117e1cf711a2968ee0e29b4b56",
+      "alpha_extrema": [
+        0,
+        253
+      ],
+      "fully_transparent_fraction": 0.6129,
+      "center_alpha": 252,
+      "outer_edge_alpha_max": 1
+    },
+    {
+      "file": "homecoming-earth-v1.png",
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGB",
+      "bytes": 2612817,
+      "sha256": "00dbc70c8c3a6a842aa68e6bd70afcdfff11647474ad9c3a43d77e63fcabdf57"
+    }
+  ]
+}

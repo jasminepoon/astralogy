@@ -113,37 +113,55 @@ export function solveCalibration(observations, catalogue) {
     landmarks: observations.length,
   };
 }
-export function integrate(
-  snapshot,
-  years,
-  { gravity = snapshot.gravity, impulse = [0, 0, 0], steps = 400 } = {},
-) {
-  let p = [...snapshot.p],
-    v = V.add(snapshot.v, impulse);
-  const path = [p],
-    h = years / steps;
-  const acc = (p) => {
-    const d = V.sub(snapshot.source, p),
-      r2 = V.dot(d, d) + 0.04 ** 2;
-    return V.scale(d, (gravity * 0.00008) / r2 ** 1.5);
-  };
-  for (let i = 0; i < steps; i++) {
-    v = V.add(v, V.scale(acc(p), h / 2));
-    p = V.add(p, V.scale(v, h));
-    v = V.add(v, V.scale(acc(p), h / 2));
-    if (i % 4 === 3) path.push(p);
+// One clock and force evaluator for previews, passive tracers and committed flight.
+export const FIELD_TICK = 1 / 512;
+export const FIELD_DURATION = Math.PI / 2;
+export function forceAt(snapshot, p, time, gravity = snapshot.gravity) {
+  const f = snapshot.field;
+  if (f && time >= f.start && time < f.until && V.norm(V.sub(p, f.origin)) <= f.radius) {
+    return V.scale(V.sub(f.center, p), f.strength);
   }
-  return { p, v, path };
+  const d = V.sub(snapshot.source, p), r2 = V.dot(d, d) + 0.04 ** 2;
+  return V.scale(d, gravity * .00008 / r2 ** 1.5);
 }
+export function integrate(snapshot, years, {gravity=snapshot.gravity, impulse=[0,0,0], dt=FIELD_TICK}={}) {
+  if(!Number.isFinite(years)||years<0||!Number.isFinite(dt)||dt<=0||dt>.02)throw Error('Invalid integration interval');
+  let p=[...snapshot.p],v=V.add(snapshot.v,impulse),elapsed=0;
+  const start=snapshot.time??0,path=[p],sample=Math.max(years/120,dt);let nextSample=sample;
+  while(elapsed<years-1e-12){
+    const time=start+elapsed,f=snapshot.field;
+    const active=f&&time<f.until-1e-12&&time>=f.start-1e-12;
+    if(!active&&gravity===0){
+      const remaining=years-elapsed,base=[...p];
+      for(let i=1;i<=24;i++)path.push(V.add(base,V.scale(v,remaining*i/24)));
+      p=V.add(base,V.scale(v,remaining));elapsed=years;break;
+    }
+    let end=Math.min(start+years,(Math.floor((time+1e-10)/dt)+1)*dt);
+    if(active)end=Math.min(end,f.until);
+    const h=end-time;if(h<1e-12){elapsed=years;break;}
+    // A step lies entirely on one side of expiry; both kicks use that force.
+    const mid=time+h/2;
+    v=V.add(v,V.scale(forceAt(snapshot,p,mid,gravity),h/2));
+    p=V.add(p,V.scale(v,h));
+    v=V.add(v,V.scale(forceAt(snapshot,p,mid,gravity),h/2));
+    elapsed=end-start;
+    if(elapsed>=nextSample-1e-12){path.push(p);nextSample+=sample;}
+  }
+  if(V.norm(V.sub(path.at(-1),p))>0)path.push(p);
+  return {p,v,path};
+}
+export function closestApproach(p,v,target){const d=V.sub(p,target),v2=V.dot(v,v);if(v2<1e-16)return {years:Infinity,miss:V.norm(d)};const years=-V.dot(d,v)/v2;return {years,miss:V.norm(V.add(d,V.scale(v,years)))};}
 export class Journey {
   #catalogue;
   #truth;
   #quotes = new Map();
   #counter = 0;
   #state;
+  #attempt=null;
+  #undo=null;
   constructor(
     features,
-    { seed = Math.floor(Math.random() * 2 ** 32), spawnIndex, balance } = {},
+    { seed = Math.floor(Math.random() * 2 ** 32), spawnIndex, balance, velocity } = {},
   ) {
     this.#catalogue = catalogueWorld(features);
     const index = spawnIndex ?? hash(seed) % this.#catalogue.length;
@@ -168,7 +186,8 @@ export class Journey {
       revision: 0,
       phase: "unknown",
       p,
-      v: [0.003, -0.002, 0.004],
+      v: velocity ? [...velocity] : [0.003, -0.002, 0.004],
+      field:null,
       source: anchor.p,
       gravity: 1,
       gravityUntil: 1000,
@@ -185,6 +204,7 @@ export class Journey {
       ledger: [],
       observations: [],
     };
+    if(!this.#state.v.every(Number.isFinite)||this.#state.v.length!==3||V.norm(this.#state.v)>.2)throw Error('Invalid initial velocity');
     this.#state.observations = this.#measure(false);
   }
   #measure(identified) {
@@ -200,6 +220,8 @@ export class Journey {
         ...(identified ? { catalogueId: s.id, range: d } : {}),
       }));
   }
+  sky(){const rt=transpose(this.#truth.r);return this.#catalogue.map(star=>({bearing:unit(rotate(rt,V.sub(star.p,this.#state.p))),brightness:Math.max(.15,Math.min(1,(7-star.mag)/6))})).sort((a,b)=>a.bearing[0]-b.bearing[0]);}
+  shipVector(v){if(!this.#state.calibration)throw Error('Orientation unresolved');return rotate(transpose(this.#state.calibration.orientation),v);}
   get revision() {
     return this.#state.revision;
   }
@@ -214,6 +236,7 @@ export class Journey {
       active: s.active,
       preference: s.preference,
       time: s.time,
+      canUndo:!!this.#undo,
       observations: clone(s.observations),
       ledger: clone(s.ledger),
       calibration: clone(s.calibration),
@@ -225,6 +248,7 @@ export class Journey {
         velocity: [...s.v],
         gravity: s.gravity,
         source: [...s.source],
+        field:clone(s.field),
         home: [0, 0, 0],
         homeDistance: V.norm(s.p),
         target: clone(s.target),
@@ -275,14 +299,15 @@ export class Journey {
       return ["brake"];
     }
     if (s.phase === "at-stop" && s.deposit.fuel > 0)
-      return ["extract", "launch-home"];
+      return ["extract", "launch-home", "gravity-home"];
     return [
       ...(!s.report && s.deposit.fuel > 0 ? ["survey"] : []),
-      ...(s.report && s.deposit.fuel > 0 ? ["launch-stop"] : []),
-      "launch-home",
+      ...(s.report && s.deposit.fuel > 0 ? ["launch-stop", "gravity-stop"] : []),
+      "launch-home", "gravity-home",
     ];
   }
   quote(kind, { speed } = {}) {
+    if(kind.startsWith("gravity-"))return this.fieldQuote({destination:kind==="gravity-stop"?"asteroid":"home",speed});
     const s = this.#state;
     if (!this.options().includes(kind))
       throw Error("Action unavailable in current state");
@@ -391,7 +416,9 @@ export class Journey {
       };
     }
     if (kind === "coast") {
-      const years = Math.min(50, s.target.remaining);
+      const fieldLeft=s.field?Math.max(0,s.field.until-s.time):0;
+      const block=(Math.floor((s.time+1e-10)/.125)+1)*.125-s.time;
+      const years = Math.min(50, s.target.remaining,fieldLeft>1e-10?Math.min(fieldLeft,block):Infinity);
       cost.lifetime = years;
       const result = integrate(s, years, { steps: 100 });
       detail = {
@@ -450,23 +477,24 @@ export class Journey {
   }
   rawQuote({ impulse = 0, gravity = this.#state.gravity } = {}) {
     const s = this.#state;
+    impulse=typeof impulse==="number"?[impulse,0,0]:impulse;
     if (s.target || s.phase === "arrived")
       throw Error(
         "Interrupt and finish the current flight leg before a raw experiment",
       );
     if (
-      !Number.isFinite(impulse) ||
-      Math.abs(impulse) > 0.02 ||
+      !Array.isArray(impulse) || impulse.length!==3 || !impulse.every(Number.isFinite) ||
+      V.norm(impulse) > 0.02000000001 ||
       ![0, 1].includes(gravity)
     )
       throw Error("Unsupported experiment");
-    const dv = rotate(this.#truth.r, [impulse, 0, 0]);
+    const dv = rotate(this.#truth.r, impulse);
     const q = {
       id: `q${++this.#counter}`,
       revision: s.revision,
       kind: "experiment",
       cost: {
-        fuel: Math.abs(impulse) * 250 + (gravity !== s.gravity ? 6 : 0),
+        fuel: V.norm(impulse) * 250 + (gravity !== s.gravity ? 6 : 0),
         credits: 0,
         lifetime: 0,
       },
@@ -476,34 +504,34 @@ export class Journey {
         gravityAfter: gravity,
         gravityDuration: s.resources.lifetime,
         summary:
-          "Ship-axis impulse and local gravity multiplier; no homeward claim.",
+          "Ship-frame vector impulse and local gravity multiplier; no homeward claim.",
       },
     };
     this.#quotes.set(q.id, {
       q: clone(q),
       effect: { v: V.add(s.v, dv), gravity },
     });
-    return { ...clone(q), detail: { ...q.detail, impulse: [impulse, 0, 0] } };
+    return { ...clone(q), detail: { ...q.detail, impulse: [...impulse] } };
   }
-  preview(id) {
+  preview(id, {frame="world",years:requestedYears}={}) {
     const record = this.#quotes.get(id);
     if (!record || record.q.revision !== this.revision)
       throw Error("Stale quote");
     const s = this.#state,
       q = record.q;
-    if (!q.kind.startsWith("launch-") && q.kind !== "experiment") return null;
-    const years = Math.min(q.detail.years ?? 2, 8);
+    if (!q.kind.startsWith("launch-") && !q.kind.startsWith("gravity-") && q.kind !== "experiment") return null;
+    const years = Math.min(requestedYears??q.detail.years??8, 8);
     const result = {
       years,
       initial: { p: [...s.p], v: [...s.v] },
       current: integrate(s, years),
       gravityOnly: integrate(s, years, { gravity: 0 }),
-      proposed: integrate(s, years, {
+      proposed: integrate(q.kind.startsWith("gravity-")?{...s,field:record.effect.field,gravity:0}:s, years, {
         gravity: q.detail.gravityAfter,
-        impulse: q.detail.impulse,
+        impulse: q.detail.impulse??[0,0,0],
       }),
     };
-    if (!s.calibration) {
+    if (!s.calibration || frame==="ship") {
       const rt = transpose(this.#truth.r),
         local = (p) => rotate(rt, V.sub(p, s.p));
       for (const key of ["current", "gravityOnly", "proposed"]) {
@@ -515,13 +543,34 @@ export class Journey {
     }
     return result;
   }
-  commit(id) {
-    const record = this.#quotes.get(id),
-      s = this.#state;
-    if (!record || record.q.revision !== s.revision)
-      throw Error("Stale or already committed quote");
-    if (!s.active) throw Error("Astra is paused; delegate before committing");
-    const { q, effect } = record;
+  rememberAttempt(id){const r=this.#quotes.get(id);if(!r||r.q.revision!==this.revision||r.q.kind!=='experiment')throw Error('Current raw quote required');this.#attempt={snapshot:clone(this.#state),q:clone(r.q),impulse:rotate(transpose(this.#truth.r),r.q.detail.impulse)};return this.attempt();}
+  attempt(){if(!this.#attempt)return null;const a=this.#attempt,s=a.snapshot,rt=transpose(this.#truth.r),end=integrate(s,8,{gravity:a.q.detail.gravityAfter,impulse:a.q.detail.impulse});return {impulse:[...a.impulse],cost:clone(a.q.cost),years:8,time:s.time,initial:{p:[0,0,0],v:rotate(rt,s.v)},path:end.path.map(p=>rotate(rt,V.sub(p,s.p))),committed:V.norm(V.sub(s.v,this.#state.v))>1e-9||Math.abs(s.time-this.#state.time)>1e-9};}
+  compareAttempt(id,{years=8}={}){if(!Number.isFinite(years)||years<=0||years>8)throw Error('Invalid comparison horizon');if(!this.#state.calibration||!this.#attempt)return null;const r=this.#quotes.get(id),a=this.#attempt,s=a.snapshot;if(!r||r.q.revision!==this.revision)throw Error('Stale quote');if(V.norm(V.sub(s.p,this.#state.p))>1e-8||V.norm(V.sub(s.v,this.#state.v))>1e-9||s.gravity!==this.#state.gravity||Math.abs(s.time-this.#state.time)>1e-9)return {sameState:false};
+    const q=r.q,original=integrate(s,years,{gravity:a.q.detail.gravityAfter,impulse:a.q.detail.impulse}),changed=integrate(q.kind.startsWith('gravity-')?{...s,field:r.effect.field,gravity:0}:s,years,{gravity:q.detail.gravityAfter,impulse:q.detail.impulse??[0,0,0]}),rt=transpose(this.#truth.r),local=x=>({...x,p:rotate(rt,V.sub(x.p,s.p)),v:rotate(rt,x.v),path:x.path.map(p=>rotate(rt,V.sub(p,s.p)))});
+    return {sameState:true,years,initial:{p:[0,0,0],v:rotate(rt,s.v)},attempt:local(original),alternative:local(changed),attemptFuel:a.q.cost.fuel,alternativeFuel:q.cost.fuel,attemptHomeProgress:V.norm(s.p)-V.norm(original.p),alternativeHomeProgress:V.norm(s.p)-V.norm(changed.p)};
+  }
+  fieldQuote({destination='home',speed,centerShip}={}){
+    const s=this.#state,kind=destination==='asteroid'?'gravity-stop':'gravity-home';
+    if(!s.calibration||s.target||s.phase==='arrived'||(destination==='asteroid'&&(!s.report||!s.deposit.fuel))||!['home','asteroid'].includes(destination))throw Error('Field edit unavailable in current state');
+    speed??=s.preference==='less-fuel'?.025:s.preference==='faster'?.065:.04;if(!Number.isFinite(speed)||speed<.02||speed>.07)throw Error('Speed outside supported bounds');
+    const target=destination==='asteroid'?s.report.position:[0,0,0],distance=V.norm(V.sub(target,s.p)),coast=Math.max(1,distance/speed-1),duration=FIELD_DURATION;
+    let center=V.add(s.p,V.scale(V.sub(V.sub(target,s.p),s.v),1/(1+coast)));
+    const field=c=>({origin:[...s.p],center:[...c],strength:1,radius:.3,start:s.time,until:s.time+duration});
+    const shoot=c=>{const end=integrate({...s,gravity:0,field:field(c)},duration);return {...end,error:V.sub(V.add(end.p,V.scale(end.v,coast)),target)};};
+    if(centerShip!==undefined){if(!Array.isArray(centerShip)||centerShip.length!==3||!centerShip.every(Number.isFinite))throw Error('Invalid field handle');center=V.add(s.p,rotate(this.#truth.r,centerShip));}
+    else for(let iteration=0;iteration<3;iteration++){const base=shoot(center);if(V.norm(base.error)<1e-9)break;const eps=1e-5,columns=[0,1,2].map(i=>{const test=[...center];test[i]+=eps;return V.scale(V.sub(shoot(test).error,base.error),1/eps);});const correction=solve3(transpose(columns),base.error);center=V.sub(center,correction);}
+    if(V.norm(V.sub(center,s.p))>.1)throw Error('Field handle outside 0.1 ly bound');
+    const f=field(center),end=shoot(center),closest=closestApproach(end.p,end.v,target),years=duration+closest.years,actualSpeed=V.norm(end.v),braking=actualSpeed*250,cost={fuel:6+V.norm(V.sub(center,s.p))*100,credits:0,lifetime:0};
+    const feasible=closest.years>0&&Number.isFinite(years)&&closest.miss<.001&&end.path.every(p=>V.norm(V.sub(p,s.p))<f.radius-.005);
+    const reserve=braking+(destination==='asteroid'?3+2*.025*250:0);
+    const q={id:`q${++this.#counter}`,revision:s.revision,kind,cost,reward:{fuel:0,credits:0},detail:{destination:target,centerShip:rotate(transpose(this.#truth.r),V.sub(center,s.p)),strength:1,duration,radius:f.radius,years:Number.isFinite(years)&&years>0?years:0,speed:actualSpeed,requestedSpeed:speed,braking,reserve,miss:closest.miss,feasible,gravityBefore:s.gravity,gravityAfter:0,gravityDuration:duration,impulse:[0,0,0],summary:'Move the bounded gravity-well handle. The force bends velocity over 1.571 years; it expires without a corrective impulse. Coast to the measured intercept and brake.'}};
+    if(years+2>s.resources.lifetime||years+2>s.budget.lifetime-s.spent.lifetime)q.detail.feasible=false;
+    if(destination==='asteroid'){const totalFuel=cost.fuel+braking+3+2*.025*250;q.detail.miningComparison={totalFuelSpent:totalFuel,grossFuel:s.deposit.fuel,netFuel:s.deposit.fuel-totalFuel,totalCreditsSpent:5,grossCredits:s.deposit.credits,netCredits:s.deposit.credits-5,totalYears:years+2+V.norm(target)/.025};}
+    this.#quotes.set(q.id,{q:clone(q),effect:{field:f,target:{name:destination,p:target,remaining:years,speed:actualSpeed},end}});return clone(q);
+  }
+  fieldTracers(id){const r=this.#quotes.get(id);if(!r||!r.effect.field||r.q.revision!==this.revision)throw Error('Current field quote required');const s=this.#state,rt=transpose(this.#truth.r);return Array.from({length:9},(_,i)=>{const offset=rotate(this.#truth.r,[(i%3-1)*.025,(Math.floor(i/3)-1)*.025,0]);const result=integrate({...s,p:V.add(s.p,offset),v:[0,0,0],field:r.effect.field,gravity:0},FIELD_DURATION);return result.path.map(p=>rotate(rt,V.sub(p,s.p)));});}
+  undo(){if(!this.#undo)throw Error('Nothing to undo');const revision=this.revision;this.#state=clone(this.#undo.state);this.#attempt=clone(this.#undo.attempt);this.#state.revision=revision;this.#state.active=false;this.#undo=null;this.#invalidate();return this.view();}
+  #validateCost(q){const s=this.#state;
     for (const key of ["fuel", "credits", "lifetime"]) {
       if (s.resources[key] + 1e-9 < q.cost[key])
         throw Error(`Insufficient ${key}; rewards cannot pay upfront costs`);
@@ -540,6 +589,19 @@ export class Journey {
       s.budget.fuel - s.spent.fuel - q.cost.fuel + 1e-9 < reserve
     )
       throw Error("Arrival fuel reserve would be breached");
+    if(q.detail.miningComparison){const m=q.detail.miningComparison;if(s.spent.fuel+m.totalFuelSpent>s.budget.fuel+1e-9)throw Error('Full stop and reserved onward route exceed the gross fuel budget');if(m.totalYears>s.resources.lifetime+1e-9||s.spent.lifetime+m.totalYears>s.budget.lifetime+1e-9)throw Error('Full stop and onward route exceed lifetime');if(s.resources.credits<2||s.spent.credits+2>s.budget.credits)throw Error('Extraction credits must be available before taking the detour');}
+    if(q.kind.startsWith('gravity-')&&!q.detail.feasible)throw Error('Edited field misses the arrival corridor; no action committed');
+  }
+  assess(id){const r=this.#quotes.get(id);if(!r||r.q.revision!==this.revision)return {affordable:false,reason:'Stale quote'};try{this.#validateCost(r.q);return {affordable:true,reason:null};}catch(e){return {affordable:false,reason:e.message};}}
+  commit(id) {
+    const record = this.#quotes.get(id),
+      s = this.#state;
+    if (!record || record.q.revision !== s.revision)
+      throw Error("Stale or already committed quote");
+    if (!s.active) throw Error("Astra is paused; delegate before committing");
+    const { q, effect } = record;
+    this.#validateCost(q);
+    if(q.kind.startsWith("gravity-"))this.#undo={state:clone(s),attempt:clone(this.#attempt)};
     for (const key of ["fuel", "credits", "lifetime"]) {
       s.resources[key] -= q.cost[key];
       s.spent[key] += q.cost[key];
@@ -558,9 +620,11 @@ export class Journey {
       s.v = effect.v;
       s.gravity = effect.gravity;
     }
+    if (q.kind.startsWith("gravity-")) {s.gravity=0;s.field=clone(effect.field);s.target=clone(effect.target);s.phase="travel";}
     if (q.kind.startsWith("launch-")) {
       s.v = effect.v;
       s.gravity = effect.gravity;
+      s.field=null;
       s.target = effect.target;
       s.phase = "travel";
     }
@@ -588,6 +652,7 @@ export class Journey {
       reward: clone(q.reward),
       balance: clone(s.resources),
       time: s.time,
+      canUndo:!!this.#undo,
     });
     this.#invalidate();
     return this.view();
