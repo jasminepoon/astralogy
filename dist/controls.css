@@ -86,3 +86,47 @@ body:not(.arrived) #arrival-plate{transition:none}
 #mining-comparison,.budget-rule{font-size:10px;color:#b2c4d0;margin:8px 0}#mining-comparison p,.budget-rule p{line-height:1.5}.budget-title{gap:8px}.budget-title span{max-width:140px;text-align:right}#scene-description:empty{display:none}#chat-form{flex-wrap:wrap}#chat-form input{flex:1 1 220px}#investigate-stop{white-space:normal!important;text-align:left}body:has(#route-budget:not([hidden])) #astra-strip{max-height:200px}body:has(#route-budget:not([hidden])) #astra-message{max-height:70px}#astra-message{scrollbar-width:thin}
 @media(max-width:700px){body:has(#route-budget:not([hidden])) #astra-strip{max-height:none}#chat-form input{flex-basis:65%}}
 @media(max-width:700px){#flight-deck{padding-top:780px}body:has(#route-budget:not([hidden])) #flight-deck{padding-top:950px}body:has(#star-context:not([hidden])) #flight-deck{padding-top:915px}}
+
+/* One route surface: consequences beside the world, judgment in conversation. */
+body:has(#route-budget:not([hidden])) #route-budget{position:static;inset:auto;width:100%;padding:0;margin:0 0 14px;border:0;background:none;box-shadow:none;backdrop-filter:none;order:2}
+#route-budget .resource-row>div:first-child{font-size:12px}
+#route-budget .resource-title,#route-tradeoff{font-size:12px}
+#route-budget .resource-legend{font-size:10px}
+#route-budget .route-adjust{margin-top:10px;font-size:12px}
+#route-budget .route-adjust summary{padding:5px 0}
+#route-budget label,#route-budget small{font-size:11px}
+#outcome-details,.budget-rule,#budget-settings{font-size:12px}
+#outcome-details summary{min-height:36px;padding:8px 0}
+#outcome-evidence{max-height:none;overflow:visible}
+#budget-settings .budget-title{display:none}
+#budget-settings{margin-bottom:12px}
+#budget-panel #delegation-note{font-size:12px}
+#quote-constraint{font-size:12px!important;line-height:1.5;padding:8px!important}
+#execution-notice{font-size:12px!important}
+body:has(#route-budget:not([hidden])) #astra-strip,#astra-strip{max-height:none}
+body:has(#route-budget:not([hidden])) #astra-message,#astra-message{max-height:none;overflow:visible;font-size:14px;line-height:1.6}
+#chat-form #route-question{border:0;background:none;padding:5px 0;color:#acdce8;text-align:left;white-space:normal;flex-basis:100%;font-size:12px}
+#chat-form #less-fuel{order:2}
+#chat-form #investigate-stop{order:3}
+#chat-form #skip-stop{order:4}
+#outcome-title[hidden]+#outcome-description[hidden]{margin:0}
+@media(min-width:701px){
+ #outcome-card{max-height:calc(100% - 390px);padding:16px 20px}
+ body:has(#route-budget:not([hidden])) .scene-tools{top:auto;bottom:300px;max-width:calc(100% - 425px)}
+ body:has(#route-budget:not([hidden])) #scene-caption{top:auto;bottom:350px}
+ body:has(#route-budget:not([hidden])) #map-legend{top:auto;bottom:380px}
+ #budget-panel{bottom:38px}
+ #astra-strip{bottom:38px}
+}
+@media(max-width:700px){
+ body:has(#route-budget:not([hidden])) #flight-deck{padding-top:780px;display:flex;flex-direction:column}
+ body:has(#route-budget:not([hidden])) .scene-tools{top:598px}
+ body:has(#route-budget:not([hidden])) #scene-caption{top:563px}
+ body:has(#route-budget:not([hidden])) #map-legend{top:531px}
+ #outcome-card{order:0}
+ #astra-strip{order:1}
+ #budget-panel{order:2}
+ #route-budget{margin-bottom:12px}
+}
+
+@media(min-width:701px){.scene-tools,body:has(#route-budget:not([hidden])) .scene-tools{bottom:calc(var(--conversation-height,240px) + 60px)}#scene-caption,body:has(#route-budget:not([hidden])) #scene-caption{bottom:calc(var(--conversation-height,240px) + 110px)}#map-legend,body:has(#route-budget:not([hidden])) #map-legend{bottom:calc(var(--conversation-height,240px) + 140px)}}

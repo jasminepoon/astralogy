@@ -6,3 +6,4 @@ output/
 
 # Keep project notes local.
 *.md
+!/README.md
