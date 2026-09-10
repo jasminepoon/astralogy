@@ -4,9 +4,13 @@ A browser sky explorer and painterly stellar sandbox, built with Three.js.
 
 ## Run locally
 
-From this directory, run `python3 -m http.server 5173 --bind 127.0.0.1`, then open `http://127.0.0.1:5173/dist/`. The distributable is the authored `dist/` directory; there is no bundler step. The two runtime libraries and astronomy data are vendored. Google Fonts is optional and falls back to system fonts.
+Run `python3 server.py`, then open [localhost:4173](http://localhost:4173). Enter the stellar studio, add a companion, and choose **Explore with Astra**. Refine the outcome in the text field or use the eight-year correction. Select a tested candidate to compare its gold trajectory with the cyan circular reference; **Play selected** replays it and **Revert** restores the original body snapshot.
 
-Run the numerical tests with `npm test` (Node 18+). No npm dependencies are required.
+The backend uses `/opt/homebrew/bin/codex` with the configured supported `gpt-6-astra` route and existing ChatGPT login. Node must be on PATH. No browser API keys are used. The loopback-only server accepts same-origin requests, validates snapshots and proposals, limits each request to five probes, disables CLI tools, and terminates model requests after 100 seconds. CLI installation alone does not establish a successful model connection; the UI reports failures without substituting a scripted response.
+
+The authored `dist/` files need no bundler. A plain static server can still serve the observatory, paint, and manual comparison, but live Astra requires `server.py`. The current hosted static site has not been updated or connected to this local backend. Runtime libraries and astronomy data are vendored; Google Fonts is optional.
+
+Run the numerical tests with `npm test` (Node 18+) and bridge checks with `python3 -m unittest discover -s tests -p 'test_*.py'`. No npm dependencies are required.
 
 ## First playable version
 
@@ -21,11 +25,11 @@ Run the numerical tests with `npm test` (Node 18+). No npm dependencies are requ
 
 The sky uses J2000 D3 Celestial coordinates and Astronomy Engine's EQJ-to-horizontal rotation. It includes Earth rotation, precession, and nutation; it omits proper motion, stellar parallax, annual aberration, and atmospheric refraction. It is not certified to the original plan's 1-arcminute accuracy target across the entire date range. Coordinates shown in the star card are catalogue RA/declination, while altitude is calculated for the observation time.
 
-The studio always uses an explicitly assumed 1-solar-mass primary, not an inferred mass or radius for the selected catalogue star. Stars have exaggerated visual radii. Body dynamics use AU, Julian years, and nominal solar masses, with G=39.476926408897626. Contact/underresolved encounters pause the model. Only safe circular companion seeds are offered.
+The studio always uses an explicitly assumed 1-solar-mass primary, not an inferred mass or radius for the selected catalogue star. Stars have exaggerated visual radii. Body dynamics use AU, Julian years, and nominal solar masses, with G=39.476926408897626. Contact/underresolved encounters pause the model. Manual comparisons support bounded explicit relative velocities up to 12 AU/year at the initial 4 AU separation. Integration steps are selected from estimated periapsis and passage speed, with a lower step limit and explicit unresolved-contact guards. Snapshots include model version, masses, initial and current positions/velocities, timestep, tick, and stopped state.
 
-Paint is massless artistic material with softened, scaled gravity and drag; it does not model plasma or perturb the stars. Paint evolves with wall-clock artistic time while bodies use simulation years. Moving the time slider refreshes paint; only body motion is deterministically replayed. Saved moments preserve model parameters, camera, sky, and body time, but not painted trails.
+Paint is massless artistic material with softened, scaled gravity and drag; it does not model plasma or perturb the stars. Paint evolves with wall-clock artistic time while bodies use simulation years. Moving the time slider refreshes paint; only body motion is deterministically replayed. Saved moments preserve complete body snapshots, camera and sky, but not painted trails. The artistic paint layer can be hidden independently; it is excluded from measured trajectories.
 
-The current prototype accepts explicit UTC input. Automatic birthplace/time-zone resolution, AstroDienst import, free companion placement/velocity, fusion and heating experiments, stellar evolution, and interstellar travel remain future work. The two-body workload runs on the main thread; a Worker is unnecessary at this bounded scale and can be added if the model expands.
+The current prototype accepts explicit UTC input. Automatic birthplace/time-zone resolution, AstroDienst import, free companion placement, fusion and heating experiments, stellar evolution, and interstellar travel remain future work. The two-body workload runs on the main thread; a Worker is unnecessary at this bounded scale and can be added if the model expands.
 
 ## Data and licenses
 
@@ -37,3 +41,13 @@ The current prototype accepts explicit UTC input. Automatic birthplace/time-zone
 ## Reference implementations
 
 Thomas Ricouard's [Void Explorer](https://developers.openai.com/showcase/void-explorer), [Sunwake](https://developers.openai.com/showcase/sunwake), and [Hollowflux](https://developers.openai.com/showcase/hollowflux) informed targeting, scene-centered interfaces, and reactive material. See `REFERENCE-AND-VALIDATION.md` for what was actually inspected. No source code or assets from those games were copied.
+
+## Live orbital proposals
+
+The creative goal is the widest **verified tested** excursion that returns before a finite deadline while preserving the starting closest approach. The first family fixes masses, launches tangentially from 4 AU, and supports 1–1.5 times circular speed with a 1–30-year deadline. Astra interprets the outcome and proposes speeds; deterministic physics supplies results. This is not AI discovery of orbital laws or a claim of global optimization.
+
+A return requires an excursion exceeding 0.01 AU, passage through the opposite half-plane, and a full revolution back to the launch ray within 0.01 AU of 4 AU. Minimum sampled separation must stay at least 3.99 AU. Event time is interpolated between full integration steps. A return close to the deadline (within two timesteps) remains unresolved; energy drift above 0.01% of the initial binding-energy scale also invalidates verification. Paths are decimated for display; extrema are measured at every integration step. Classification as analytically bound is kept separate from an observed return. Probes have a 250,000-step budget; unresolved and late probes remain inspectable.
+
+The interface retains each proposal, its source snapshot, measured probes, and selection in memory. **Export experiment record** saves these as JSON. Records are not automatically persisted across reloads. Body moments can separately be saved on the device. Changing a request or model state invalidates any pending response; prior probes sent to Astra are restricted to the current mass and model version.
+
+See [LOCAL-VALIDATION.md](LOCAL-VALIDATION.md) for actual run evidence and [DEVELOPMENT-PROVENANCE.md](DEVELOPMENT-PROVENANCE.md) for event eligibility boundaries.

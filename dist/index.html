@@ -118,6 +118,10 @@
           <span>〰</span> Paint</button
         ><button id="orbit-tool" class="tool"><span>◎</span> Orbit</button>
       </div>
+      <label class="toggle-row"
+        ><input id="show-paint" type="checkbox" checked /> Artistic paint layer
+        · not measured</label
+      >
       <p class="eyebrow spacer">YOUR PALETTE</p>
       <div id="palette">
         <button
@@ -165,6 +169,43 @@
         Starts in a circular orbit, 4 AU apart.<br />Changing mass starts a new
         experiment.
       </p>
+      <details id="orbit-compare">
+        <summary>Compare orbital futures</summary>
+        <p class="micro">
+          Same starting positions, different velocity. Add a companion first.
+        </p>
+        <label class="range-label" for="velocity-tangent"
+          >Sideways <output id="tangent-value">1.00 × circular</output></label
+        >
+        <input
+          id="velocity-tangent"
+          type="range"
+          min="0"
+          max="1.6"
+          step=".05"
+          value="1"
+        />
+        <label class="range-label" for="velocity-radial"
+          >Outward <output id="radial-value">0.00 × circular</output></label
+        >
+        <input
+          id="velocity-radial"
+          type="range"
+          min="-.6"
+          max=".6"
+          step=".05"
+          value="0"
+        />
+        <p id="velocity-vector" class="micro"></p>
+        <button id="compare-btn" class="secondary">Compare 12 years</button>
+        <button id="alternative-btn" class="text-button" disabled>
+          Play alternative
+        </button>
+        <button id="revert-compare" class="text-button" disabled>
+          Revert comparison
+        </button>
+        <div id="comparison-result" role="status" aria-live="polite"></div>
+      </details>
       <button id="reset-btn" class="text-button">↺ Reset experiment</button
       ><button id="return-btn" class="text-button">← Return to your sky</button>
     </aside>
@@ -172,7 +213,51 @@
       <p class="eyebrow">
         EXPERIMENT · <span id="model-name">SUN-LIKE MODEL</span>
       </p>
-      <h2>Gravity, <br /><em>in motion.</em></h2>
+      <h2>
+        How far,<br />
+        <em>before home?</em>
+      </h2>
+      <label for="outcome" class="goal-label">Shape an orbital future</label>
+      <textarea id="outcome" rows="3" maxlength="800">
+Make the stars swing as far apart as possible, return within 10 years, and never approach closer than the starting 4 AU.</textarea>
+      <label class="deadline-label" for="return-deadline"
+        >Return within
+        <input
+          id="return-deadline"
+          type="number"
+          min="1"
+          max="30"
+          step=".5"
+          value="10"
+        />
+        years</label
+      >
+      <button id="explore-btn" class="primary">Explore with Astra ↗</button>
+      <button id="sooner-btn" class="text-button">
+        Actually, bring them back within eight years
+      </button>
+      <p id="astra-status" role="status" aria-live="polite">
+        Checking live connection…
+      </p>
+      <p id="path-legend" class="micro">Astra proposes. Gravity checks.</p>
+      <div class="probe-actions">
+        <button id="play-probe" class="secondary" disabled>Play selected</button
+        ><button id="undo-probe" class="text-button" disabled>Revert</button>
+      </div>
+      <div id="probe-history"></div>
+      <button id="export-probes" class="text-button" disabled>
+        Export experiment record ↗
+      </button>
+      <details class="return-definition">
+        <summary>What counts as a return?</summary>
+        <p class="micro">
+          A real outward excursion, then one full relative orbit back within
+          0.01 AU of the starting 4 AU separation. The closest sampled approach
+          must remain at least 3.99 AU. Fixed masses; tangential launch. A
+          predicted bound orbit is not an observed return. The widest verified
+          candidate is only the widest among the probes tested.
+        </p>
+      </details>
       <p class="muted">Inspired by <span id="inspiration">Rigel</span></p>
       <dl>
         <div>

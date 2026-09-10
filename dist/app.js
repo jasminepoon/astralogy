@@ -1,5 +1,11 @@
 import * as THREE from "./vendor/three.module.js";
-import { Experiment, G } from "./physics.js";
+import {
+  Experiment,
+  G,
+  compareTrajectories,
+  orbitalElements,
+} from "./physics.js";
+import { setupCreative } from "./creative.js";
 import { skyTransform } from "./astro.js";
 const $ = (s) => document.querySelector(s),
   $$ = (s) => [...document.querySelectorAll(s)];
@@ -49,7 +55,9 @@ let mode = "sky",
   studioYaw = 0.2,
   studioPitch = 0.4,
   studioDistance = 15;
-const experiment = new Experiment();
+let experiment = new Experiment();
+let comparison = null,
+  beforeComparison = null;
 let toastTimer;
 function toast(message) {
   $("#toast").textContent = message;
@@ -228,6 +236,16 @@ function pointCloud(positions, colors, sizes, opacities) {
 let starPoints;
 const labels = new Map();
 function cameraUpdate() {
+  if (mode === "lab" && innerWidth <= 760)
+    camera.setViewOffset(
+      innerWidth,
+      innerHeight,
+      0,
+      innerHeight * 0.19,
+      innerWidth,
+      innerHeight,
+    );
+  else camera.clearViewOffset();
   if (mode === "sky") {
     camera.position.set(0, 0, 0);
     camera.lookAt(
@@ -236,10 +254,13 @@ function cameraUpdate() {
       -Math.cos(skyYaw) * Math.cos(skyPitch),
     );
   } else {
+    const viewDistance =
+      studioDistance *
+      (innerWidth <= 760 ? Math.max(1, 0.8 / camera.aspect) : 1);
     camera.position.set(
-      studioDistance * Math.sin(studioYaw) * Math.cos(studioPitch),
-      studioDistance * Math.sin(studioPitch),
-      studioDistance * Math.cos(studioYaw) * Math.cos(studioPitch),
+      viewDistance * Math.sin(studioYaw) * Math.cos(studioPitch),
+      viewDistance * Math.sin(studioPitch),
+      viewDistance * Math.cos(studioYaw) * Math.cos(studioPitch),
     );
     camera.lookAt(0, 0, 0);
   }
@@ -411,27 +432,130 @@ function updateOrbits() {
   }
   orbitGroup.clear();
   if (!experiment.companion) return;
-  for (const radius of [
-    (4 * experiment.mass) / (1 + experiment.mass),
-    4 / (1 + experiment.mass),
-  ]) {
-    const p = [];
-    for (let j = 0; j <= 200; j++) {
-      const a = (j / 200) * Math.PI * 2;
-      p.push(new THREE.Vector3(radius * Math.cos(a), 0, radius * Math.sin(a)));
+  // Actual integrated paths replace the old circular guide rings.
+  if (comparison)
+    for (const [branch, color] of [
+      [comparison.baseline, 0x85e9fa],
+      [comparison.alternative, 0xf7c580],
+    ]) {
+      for (let body = 0; body < 2; body++)
+        orbitGroup.add(
+          new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints(
+              branch.path.map((p) => new THREE.Vector3(...p.positions[body])),
+            ),
+            new THREE.LineBasicMaterial({
+              color,
+              transparent: true,
+              opacity: body ? 0.9 : 0.45,
+            }),
+          ),
+        );
     }
-    orbitGroup.add(
-      new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(p),
-        new THREE.LineBasicMaterial({
-          color: 0x91a9d1,
-          transparent: true,
-          opacity: 0.2,
-        }),
-      ),
-    );
-  }
 }
+const velocityArrow = new THREE.ArrowHelper(
+  new THREE.Vector3(0, 0, 1),
+  new THREE.Vector3(),
+  2,
+  0xf7c580,
+  0.3,
+  0.16,
+);
+studio.add(velocityArrow);
+velocityArrow.visible = false;
+function candidateVelocity() {
+  const v = Math.sqrt((G * (1 + experiment.mass)) / 4);
+  return [
+    Number($("#velocity-radial").value) * v,
+    0,
+    Number($("#velocity-tangent").value) * v,
+  ];
+}
+function updateVelocity() {
+  const v = candidateVelocity();
+  $("#tangent-value").textContent =
+    Number($("#velocity-tangent").value).toFixed(2) + " × circular";
+  $("#radial-value").textContent =
+    Number($("#velocity-radial").value).toFixed(2) + " × circular";
+  $("#velocity-vector").textContent =
+    `Relative velocity: (${v.map((x) => x.toFixed(2)).join(", ")}) AU/year. Arrow at the starting companion; length scaled for display.`;
+  velocityArrow.visible = experiment.companion && $("#orbit-compare").open;
+  velocityArrow.position.set(...(experiment.initial[1]?.p || [0, 0, 0]));
+  const vector = new THREE.Vector3(...v);
+  velocityArrow.setDirection(
+    vector.length() ? vector.clone().normalize() : new THREE.Vector3(0, 0, 1),
+  );
+  velocityArrow.setLength(Math.max(0.01, vector.length() * 0.5), 0.25, 0.12);
+}
+function clearComparison() {
+  comparison = null;
+  beforeComparison = null;
+  $("#comparison-result").textContent = "";
+  $("#alternative-btn").disabled = $("#revert-compare").disabled = true;
+}
+$("#orbit-compare").ontoggle = updateVelocity;
+for (const id of ["#velocity-tangent", "#velocity-radial"])
+  $(id).oninput = () => {
+    updateVelocity();
+    if (comparison)
+      $("#comparison-result").textContent =
+        "Velocity changed. Compare again to update the displayed paths.";
+    $("#alternative-btn").disabled = true;
+  };
+$("#compare-btn").onclick = () => {
+  if (!experiment.companion) return toast("Add a companion star first.");
+  setPlaying(false);
+  try {
+    const result = compareTrajectories(
+      experiment.snapshot(),
+      candidateVelocity(),
+    );
+    beforeComparison ||= experiment.snapshot();
+    comparison = result;
+    experiment = Experiment.fromSnapshot(result.baseline.start);
+    targetTime = 0;
+    updateOrbits();
+    updateTime();
+    $("#alternative-btn").disabled = $("#revert-compare").disabled = false;
+    $("#comparison-result").replaceChildren();
+    for (const [label, b, color] of [
+      ["Baseline", result.baseline, "#85e9fa"],
+      ["Alternative", result.alternative, "#f7c580"],
+    ]) {
+      const p = document.createElement("p");
+      p.style.color = color;
+      p.textContent = `${label} · ${b.status} at ${(b.end.tick * b.end.h).toFixed(2)} yr. Closest sampled: ${b.minSeparation.toFixed(3)} AU. Eccentricity: ${b.elements.eccentricity.toFixed(3)}. Energy error: ${(b.maxEnergyError * 100).toFixed(4)}% of initial binding scale.${b.reason ? " " + b.reason : ""}`;
+      $("#comparison-result").append(p);
+    }
+    const note = document.createElement("p");
+    note.textContent =
+      "Paths cover only the simulated interval. Closest sampled separation is not a guaranteed orbital minimum. Paint is excluded.";
+    $("#comparison-result").append(note);
+  } catch (e) {
+    toast(e.message);
+  }
+};
+$("#alternative-btn").onclick = () => {
+  if (!comparison) return;
+  experiment = Experiment.fromSnapshot(comparison.alternative.start);
+  targetTime = 0;
+  setPlaying(true);
+  $("#period").textContent =
+    comparison.alternative.elements.period?.toFixed(2) + " years";
+  if (comparison.alternative.elements.period === null)
+    $("#period").textContent = "Unbound";
+};
+$("#revert-compare").onclick = () => {
+  if (!beforeComparison) return;
+  experiment = Experiment.fromSnapshot(beforeComparison);
+  targetTime = experiment.time;
+  clearComparison();
+  updateOrbits();
+  updateTime();
+  setPlaying(false);
+  $("#period").textContent =
+    orbitalElements(experiment.bodies).period?.toFixed(2) + " years";
+};
 const N = 14000,
   pp = new Float32Array(N * 3),
   vv = new Float32Array(N * 3),
@@ -450,6 +574,9 @@ const palette = ["#70d7f1", "#a88cef", "#ee8bad", "#f0b976"].map(
 );
 const dust = pointCloud(pp, cc, ss, oo);
 studio.add(dust);
+$("#show-paint").onchange = () => {
+  dust.visible = $("#show-paint").checked;
+};
 // Ring-buffer particles form a persistent, gravitationally advected artistic field.
 function putParticle(x, y, z, vx, vy, vz, c, size = 12, age = 1) {
   const i = head++ % N,
@@ -634,7 +761,9 @@ function resetExperiment(
   companion = experiment.companion,
   mass = Number($("#mass").value),
 ) {
+  clearComparison();
   experiment.reset(mass, companion);
+  updateVelocity();
   targetTime = 0;
   paintCount = 0;
   seedDust();
@@ -653,6 +782,15 @@ function resetExperiment(
   updateTime();
 }
 function updateTime() {
+  const period = experiment.companion
+    ? orbitalElements(experiment.initial).period
+    : null;
+  $("#period").textContent = !experiment.companion
+    ? "—"
+    : period === null
+      ? "Unbound"
+      : period.toFixed(2) + " years";
+  $("#timeline").max = comparison?.horizon ?? 30;
   $("#elapsed").innerHTML =
     experiment.time.toFixed(2) + " <small>years</small>";
   $("#timeline").value = experiment.time;
@@ -792,6 +930,7 @@ $("#save-btn").onclick = () => {
       "stellar-atelier-v1",
       JSON.stringify({
         version: 1,
+        bodySnapshot: experiment.snapshot(),
         selected,
         date: date.toISOString(),
         lat,
@@ -823,8 +962,10 @@ $("#load-btn").onclick = () => {
     )
       throw Error("Saved moment is not valid.");
     skyTransform(new Date(s.date), s.lat, s.lon);
-    const restored = new Experiment(s.mass, s.companion);
-    restored.seek(s.time);
+    const restored = s.bodySnapshot
+      ? Experiment.fromSnapshot(s.bodySnapshot)
+      : new Experiment(s.mass, s.companion);
+    if (!s.bodySnapshot) restored.seek(s.time);
     date = new Date(s.date);
     lat = s.lat;
     lon = s.lon;
@@ -835,8 +976,15 @@ $("#load-btn").onclick = () => {
     focusStar(s.selected);
     $("#mass").value = s.mass;
     resetExperiment(s.companion, s.mass);
-    targetTime = s.time;
-    experiment.seek(targetTime);
+    experiment = restored;
+    targetTime = experiment.time;
+    updateOrbits();
+    updateVelocity();
+    if (experiment.companion) {
+      const period = orbitalElements(experiment.bodies).period;
+      $("#period").textContent =
+        period === null ? "Unbound" : period.toFixed(2) + " years";
+    }
     studioYaw = Number.isFinite(s.studioYaw) ? s.studioYaw : 0.2;
     studioPitch = Number.isFinite(s.studioPitch) ? s.studioPitch : 0.4;
     studioDistance = Number.isFinite(s.studioDistance)
@@ -1065,7 +1213,10 @@ function frame(now) {
   }
   if (mode === "lab") {
     if (playing) {
-      targetTime = Math.min(30, targetTime + dt * Number($("#speed").value));
+      targetTime = Math.min(
+        comparison?.horizon ?? 30,
+        targetTime + dt * Number($("#speed").value),
+      );
       try {
         experiment.seek(targetTime);
       } catch (e) {
@@ -1073,7 +1224,7 @@ function frame(now) {
         toast(e.message);
       }
       moveDust(dt);
-      if (targetTime >= 30) setPlaying(false);
+      if (targetTime >= (comparison?.horizon ?? 30)) setPlaying(false);
     }
     primary.position.set(...experiment.bodies[0].p);
     glow1.position.copy(primary.position);
@@ -1114,6 +1265,7 @@ window.addEventListener("resize", () => {
   renderer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
+  cameraUpdate();
 });
 const getState = () => ({
   mode,
@@ -1127,7 +1279,9 @@ const getState = () => ({
   years: experiment.time,
   playing,
   paintStrokes: paintCount,
-  bodyPositions: experiment.bodies.map((b) => b.p),
+  bodyPositions: experiment.bodies.map((b) => [...b.p]),
+  bodySnapshot: experiment.snapshot(),
+  comparison: comparison ? structuredClone(comparison) : null,
   energy: experiment.energy(),
   frameMs,
   frameSampleCount: frameIntervals.length,
@@ -1138,7 +1292,32 @@ const getState = () => ({
     : null,
   drawCalls: renderer.info.render.calls,
 });
-window.__STELLAR_ATELIER__ = { getState };
+const creative = setupCreative({
+  pause: () => setPlaying(false),
+  snapshot: () => experiment.snapshot(),
+  preview: (result) => {
+    beforeComparison ||= experiment.snapshot();
+    comparison = result;
+    experiment = Experiment.fromSnapshot(result.baseline.start);
+    $("#mass").value = experiment.mass;
+    $("#mass-value").textContent = experiment.mass.toFixed(1) + " M☉";
+    $("#companion-state").textContent = experiment.mass.toFixed(1) + " M☉";
+    $("#companion-btn").textContent = "− Remove companion star";
+    secondary.visible = glow2.visible = true;
+    updateVelocity();
+    targetTime = 0;
+    setPlaying(false);
+    updateOrbits();
+    updateTime();
+    $("#alternative-btn").disabled = $("#revert-compare").disabled = false;
+    $("#period").textContent = experiment.period.toFixed(2) + " years";
+  },
+  play: () => $("#alternative-btn").click(),
+  revert: () => $("#revert-compare").click(),
+});
+window.__STELLAR_ATELIER__ = {
+  getState: () => ({ ...getState(), liveRecords: creative.getRecords() }),
+};
 if (document.modelContext?.registerTool) {
   for (const t of [
     {

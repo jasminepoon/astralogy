@@ -1275,3 +1275,139 @@ dd {
     display: none;
   }
 }
+
+#orbit-compare {
+  margin: 16px 0;
+  font-size: 14px;
+}
+#orbit-compare summary {
+  cursor: pointer;
+  padding: 12px 0;
+  color: #85e9fa;
+}
+#orbit-compare input {
+  width: 100%;
+  min-height: 30px;
+}
+#orbit-compare output {
+  font-size: 12px;
+}
+#comparison-result p {
+  font-size: 14px;
+  line-height: 1.5;
+}
+#orbit-compare button {
+  min-height: 44px;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+#lab-card textarea {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  min-height: 96px;
+  padding: 10px;
+  background: #080f1d;
+  border: 1px solid #55617b;
+  border-radius: 8px;
+  color: #edf4ff;
+  font: 14px/1.45 inherit;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.goal-label {
+  display: block;
+  font-size: 14px;
+  margin: 16px 0 8px;
+}
+.deadline-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  margin: 10px 0;
+}
+#return-deadline {
+  width: 64px;
+  background: #0e1727;
+  color: #fff;
+  border: 1px solid #55617b;
+  border-radius: 5px;
+  padding: 8px;
+  font-size: 14px;
+}
+#lab-card #explore-btn {
+  margin: 8px 0;
+}
+#astra-status {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #bcecf6;
+}
+.probe-choice {
+  width: 100%;
+  text-align: left;
+  background: #111e30;
+  color: #eee;
+  border: 1px solid #53617b;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.probe-choice[aria-pressed="true"] {
+  border-color: #f7c580;
+  color: #f7c580;
+}
+.probe-record {
+  margin: 16px 0;
+  border-top: 1px solid #45516a;
+  padding-top: 10px;
+}
+.probe-record summary,
+.return-definition summary {
+  cursor: pointer;
+  font-size: 14px;
+  padding: 8px 0;
+}
+.probe-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+#lab-card .text-button {
+  white-space: normal;
+}
+@media (min-width: 1100px) {
+  #lab-card {
+    width: 310px;
+    top: 120px;
+    max-height: calc(100dvh - 235px);
+  }
+  #lab-card h2 {
+    font-size: 32px;
+  }
+}
+@media (max-width: 760px) {
+  .lab #lab-card {
+    max-height: 34dvh;
+    bottom: 160px;
+  }
+  #lab-card h2 {
+    font-size: 22px;
+  }
+  #lab-card textarea {
+    min-height: 82px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 760px) {
+  #lab-card h2 {
+    letter-spacing: -0.4px;
+  }
+}
