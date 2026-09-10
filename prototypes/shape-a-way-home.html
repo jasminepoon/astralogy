@@ -1,0 +1,187 @@
+<div id="wayhome-concept" aria-label="Capability discovery concept">
+  <style>
+    #wayhome-concept { --wh-bg:#08111d; --wh-panel:#101c2b; --wh-ink:#f0f5fa; --wh-muted:#b1c1d2; --wh-line:#34485d; --wh-cyan:#8ce5ee; --wh-warm:#e8bb86; font-family:'Public Sans',system-ui,sans-serif; color:var(--wh-ink); }
+    #wayhome-concept * { box-sizing:border-box; }
+    #wayhome-concept .wh-review { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px 0; }
+    #wayhome-concept button { font:inherit; color:var(--wh-ink); background:var(--wh-panel); border:1px solid var(--wh-line); border-radius:7px; min-height:44px; padding:9px 14px; cursor:pointer; }
+    #wayhome-concept button:disabled { opacity:.45; cursor:default; }
+    #wayhome-concept button:focus-visible, #wayhome-concept input:focus-visible { outline:3px solid var(--wh-cyan); outline-offset:4px; }
+    #wayhome-concept .wh-review button { padding:6px 10px; }
+    #wayhome-concept .wh-review button[aria-current=step] { border-color:var(--wh-cyan); color:var(--wh-cyan); }
+    #wayhome-concept .wh-stage { background:var(--wh-bg); padding:24px; }
+    #wayhome-concept .wh-header { display:flex; gap:16px; justify-content:space-between; align-items:center; flex-wrap:wrap; }
+    #wayhome-concept .wh-brand { font-family:Georgia,serif; letter-spacing:.09em; }
+    #wayhome-concept .wh-balances { display:flex; flex-wrap:wrap; gap:20px; color:var(--wh-muted); font-variant-numeric:tabular-nums; }
+    #wayhome-concept strong { color:var(--wh-ink); font-weight:500; }
+    #wayhome-concept h2 { font-family:Georgia,serif; font-weight:400; margin:28px 0 10px; }
+    #wayhome-concept .wh-workspace { display:grid; grid-template-columns:minmax(0,1fr) 290px; gap:22px; align-items:start; }
+    #wayhome-concept .wh-scene { height:360px; position:relative; overflow:hidden; margin:0; background:radial-gradient(ellipse at 65% 60%,#122b3e 0%,#08111d 67%); }
+    #wayhome-concept .wh-scene svg { display:block; width:100%; height:100%; }
+    #wayhome-concept .wh-scene text { font-family:inherit; fill:var(--wh-muted); }
+    #wayhome-concept .wh-controls { display:flex; flex-direction:column; gap:16px; }
+    #wayhome-concept .wh-astra { border-left:2px solid var(--wh-cyan); padding:18px; background:var(--wh-panel); width:100%; }
+    #wayhome-concept .wh-astra-label { color:var(--wh-cyan); letter-spacing:.1em; }
+    #wayhome-concept p { margin:10px 0 16px; }
+    #wayhome-concept .wh-actions { display:flex; flex-wrap:wrap; gap:9px; }
+    #wayhome-concept .wh-primary { background:var(--wh-cyan); color:var(--wh-bg); border-color:var(--wh-cyan); }
+    #wayhome-concept .wh-quote { padding:16px 0 0; border-top:1px solid var(--wh-line); width:100%; }
+    #wayhome-concept .wh-progress { color:var(--wh-muted); margin:8px 0 22px; }
+    #wayhome-concept .wh-progress strong { color:var(--wh-cyan); }
+    #wayhome-concept .wh-status { color:var(--wh-muted); margin:12px 0 0; }
+    #wayhome-concept .wh-stats { display:grid; grid-template-columns:1fr 1fr; gap:14px; font-variant-numeric:tabular-nums; }
+    #wayhome-concept .wh-stats span { display:block; color:var(--wh-muted); margin-bottom:5px; }
+    #wayhome-concept .wh-cost { color:var(--wh-muted); margin:14px 0 0; }
+    #wayhome-concept .wh-handle { margin:16px 0 0; }
+    #wayhome-concept .wh-handle label { display:flex; justify-content:space-between; color:var(--wh-cyan); }
+    #wayhome-concept .wh-fine-hint { color:var(--wh-muted); margin:10px 0 0; }
+    #wayhome-concept .wh-handle input { width:100%; accent-color:var(--wh-cyan); min-height:44px; cursor:ew-resize; }
+    #wayhome-concept .wh-scale { display:flex; justify-content:space-between; color:var(--wh-muted); }
+    #wayhome-concept details { margin-top:22px; color:var(--wh-muted); }
+    #wayhome-concept summary { cursor:pointer; min-height:44px; display:flex; align-items:center; }
+    #wayhome-concept .wh-ghost { border:0; background:transparent; color:var(--wh-muted); padding-left:0; }
+    #wayhome-concept [hidden] { display:none !important; }
+    @media(max-width:700px) { #wayhome-concept .wh-stage { padding:18px; } #wayhome-concept .wh-workspace { grid-template-columns:1fr; } #wayhome-concept .wh-controls { order:-1; } #wayhome-concept .wh-scene { height:230px; } #wayhome-concept .wh-balances { gap:12px; } }
+    #wayhome-concept .wh-resource-chart { margin:20px 0 0; }
+    #wayhome-concept .wh-resource-title { margin-bottom:14px; color:var(--wh-ink); }
+    #wayhome-concept .wh-resource-row { margin:14px 0; }
+    #wayhome-concept .wh-resource-label { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:8px; font-variant-numeric:tabular-nums; }
+    #wayhome-concept .wh-resource-track { position:relative; display:flex; height:14px; background:var(--wh-line); }
+    #wayhome-concept .wh-resource-used { background:var(--wh-line); }
+    #wayhome-concept .wh-resource-left { flex:1; background:var(--wh-cyan); }
+    #wayhome-concept .wh-baseline { position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--wh-ink); }
+    #wayhome-concept .wh-resource-legend { display:flex; flex-wrap:wrap; gap:14px; color:var(--wh-muted); margin-top:16px; }
+    #wayhome-concept .wh-resource-legend span { display:inline-flex; align-items:center; gap:6px; }
+    #wayhome-concept .wh-swatch { display:inline-block; width:12px; height:10px; background:var(--wh-line); }
+    #wayhome-concept .wh-swatch-left { background:var(--wh-cyan); }
+    #wayhome-concept .wh-swatch-baseline { width:2px; height:16px; background:var(--wh-ink); }
+    #wayhome-concept .wh-tradeoff { color:var(--wh-cyan); font-variant-numeric:tabular-nums; }
+  </style>
+  <section class="wh-stage">
+    <header class="wh-header"><span class="wh-brand">THE WAY HOME</span><div class="wh-balances"><span>Fuel <strong data-fuel>22</strong></span><span>Credits <strong data-credits>15</strong></span><span>Years left <strong data-years>500</strong></span></div></header>
+    <h2 data-heading>Find your way home.</h2>
+    <div class="wh-progress" data-progress aria-label="Journey steps"></div>
+    <div class="wh-workspace">
+    <div class="wh-map">
+    <div class="wh-scene" aria-label="Illustrative route comparison">
+      <svg role="img" aria-label="Illustrative scene, not a physics simulation"><g data-stars></g><g data-evidence></g><path data-direct fill="none" stroke="var(--wh-warm)" stroke-width="1.5" stroke-dasharray="5 5"/><path data-old fill="none" stroke="var(--wh-muted)" stroke-width="1" opacity=".45"/><path data-route fill="none" stroke="var(--wh-cyan)" stroke-width="3"/><circle data-field fill="none" stroke="var(--wh-cyan)" opacity=".2"/><circle data-handle fill="var(--wh-cyan)" fill-opacity=".14" stroke="var(--wh-cyan)" r="22"/><circle data-handle-dot fill="var(--wh-cyan)" r="6" pointer-events="none"/><circle data-ship fill="var(--wh-ink)" r="5"/><circle data-home fill="none" stroke="var(--wh-ink)" r="8"/><text data-ship-label>You</text><text data-home-label>Home</text><text data-route-label></text></svg>
+    </div>
+    <figure class="wh-resource-chart" data-resources hidden aria-label="Resource budgets for the selected route">
+      <figcaption class="wh-resource-title" data-resource-title>Budget after this trip</figcaption>
+      <div class="wh-resource-row">
+        <div class="wh-resource-label"><span>Fuel · 22 total</span><strong data-fuel-left></strong></div>
+        <div class="wh-resource-track" data-fuel-bar role="img"><span class="wh-resource-used" data-fuel-used></span><span class="wh-resource-left"></span><span class="wh-baseline" style="left:90.7273%" aria-hidden="true"></span></div>
+      </div>
+      <div class="wh-resource-row">
+        <div class="wh-resource-label"><span>Time · 500 years total</span><strong data-time-left></strong></div>
+        <div class="wh-resource-track" data-time-bar role="img"><span class="wh-resource-used" data-time-used></span><span class="wh-resource-left"></span><span class="wh-baseline" style="left:58.98%" aria-hidden="true"></span></div>
+      </div>
+      <div class="wh-resource-legend"><span><i class="wh-swatch" aria-hidden="true"></i>Used</span><span><i class="wh-swatch wh-swatch-left" aria-hidden="true"></i>Left</span><span><i class="wh-swatch wh-swatch-baseline" aria-hidden="true"></i>Original route</span></div>
+      <p class="wh-tradeoff" data-tradeoff></p>
+    </figure>
+    </div>
+    <div class="wh-controls">
+      <div class="wh-astra" aria-live="polite"><span class="wh-astra-label" data-next>TRY FIRST</span><p data-message></p><div class="wh-actions"><button type="button" class="wh-primary" data-primary></button><button type="button" data-secondary hidden></button></div><p class="wh-status" data-status></p><button type="button" class="wh-ghost" data-interrupt hidden>Interrupt</button></div>
+      <div class="wh-quote" data-quote><div class="wh-stats"><div><span data-label-a></span><strong data-value-a></strong></div><div><span data-label-b></span><strong data-value-b></strong></div></div><p class="wh-cost" data-cost></p><div class="wh-handle" data-handle-control hidden><label for="wh-route-choice">Bend gravity <output data-bend-value>0.0%</output></label><input id="wh-route-choice" type="range" min="0" max="1000" step="1" value="0" aria-label="Bend gravity toward less fuel" aria-describedby="wh-fine-hint"><div class="wh-scale"><span>Faster</span><span>Less fuel</span></div><p class="wh-fine-hint" id="wh-fine-hint">Drag to adjust · Shift-drag for precision.<br>Slider arrow keys: 0.1% per step.</p></div></div>
+    </div>
+    </div>
+    <details><summary>Evidence &amp; ledger</summary><p data-details></p></details>
+    <details><summary>Concept review · skip to a scene</summary><nav class="wh-review" aria-label="Prototype review stages"><button type="button" data-stage="0">Lost</button><button type="button" data-stage="1">Located</button><button type="button" data-stage="2">Recommendation</button><button type="button" data-stage="3">Revised</button><button type="button" data-stage="4">Outcome</button></nav></details>
+  </section>
+  <script>
+    (()=>{
+      const root=document.getElementById('wayhome-concept');
+      const q=s=>root.querySelector(s), state={step:3,brief:true,framing:'discovery',push:false,paused:false,simulated:true,bend:.5};
+      const range=q('#wh-route-choice');
+      const set=(name,text)=>q('[data-'+name+']').textContent=text;
+      const rows=[
+        {heading:'Find your way home.',message:'Try a push. See where it would take you.',long:'Start with a free push preview from your ship. Then ask Astra to help find a route home.',primary:'Try a push',secondary:'Ask Astra instead',a:'Home direction',av:'Unknown',b:'Investigation',bv:'6 credits',cost:'Within your 22 fuel / 15 credits / 500 year budget.'},
+        {heading:'Home is here. Fuel is the problem.',message:'A direct push needs 45 fuel. We have 22. We can bend gravity instead.',long:'The measurements locate home. A direct push needs 45 fuel including braking. Moving a gravity well can create an affordable route.',primary:'Show me how',a:'Direct push + brake',av:'45 fuel',b:'Available',bv:'22 fuel',cost:'Position found · four measurements checked.'},
+        {heading:'Bend a route home.',message:'Astra recommends a gravity field. Test its route before using fuel.',long:'Astra recommends moving this field to bend your motion toward home. Simulate the proposed route before committing fuel.',primary:'Simulate this route',a:'Fuel left at home',av:'2.04',b:'Years left at home',bv:'205.1',cost:'Trip: 19.96 fuel · 294.9 years · braking included'},
+        {heading:'More fuel left. Less time left.',message:'5.23 more fuel saved. 176.6 more years traveling.',long:'The lower-fuel field saves another 5.23 fuel, but uses another 176.6 years. Both routes reach home within your budget.',primary:'Run now',secondary:'Use faster route',a:'Fuel left at home',av:'7.28',b:'Years left at home',bv:'28.5',cost:'Trip: 14.72 fuel · 471.5 years · braking included'},
+        {heading:'Home.',message:'You changed the plan. We arrived with more fuel.',long:'The revised field carried us home. The arrival record includes the final braking cost.',primary:'Replay concept',a:'Fuel remaining',av:'7.28',b:'Years remaining',bv:'28.5',cost:'Arrival + braking verified · example result'}
+      ];
+      let choseEconomy=true;
+      const trip=()=>({fuel:19.96-5.24*state.bend,years:294.9+176.6*state.bend});
+      function draw(){
+        const svg=q('svg'), box=q('.wh-scene'), w=box.clientWidth,h=box.clientHeight;
+        svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+        const x=w*.13,y=h*.68,hx=w*.85,hy=h*.25,known=state.step>0,proposal=state.step>=2,eco=state.bend>0;
+        q('[data-stars]').innerHTML=Array.from({length:45},(_,i)=>`<circle cx="${(i*97+19)%Math.max(1,w)}" cy="${(i*47+11)%h}" r="${i%9===0?1.8:.8}" fill="var(--wh-muted)" opacity="${i%3===0?.7:.25}"/>`).join('');
+        q('[data-evidence]').innerHTML=known&&state.step<4?[.2,.4,.64,.77].map((n,i)=>`<circle cx="${w*n}" cy="${h*(.13+i*.11)}" r="5" stroke="var(--wh-cyan)" fill="none" opacity=".7"/>`).join(''):'';
+        function circle(sel,cx,cy,r){const e=q(sel);e.setAttribute('cx',cx);e.setAttribute('cy',cy);if(r)e.setAttribute('r',r);}
+        function label(sel,lx,ly,text){const e=q(sel);e.setAttribute('x',lx);e.setAttribute('y',ly);if(text!==undefined)e.textContent=text;}
+        circle('[data-ship]',state.step===4?hx:x,state.step===4?hy:y);
+        label('[data-ship-label]',x-10,y+25,state.step===4?'':'You');
+        circle('[data-home]',hx,hy);q('[data-home]').style.display=known?'':'none';
+        label('[data-home-label]',hx-18,hy-18,known?'Home':'');
+        q('[data-direct]').setAttribute('d',known&&state.step<4?`M ${x} ${y} L ${hx} ${hy}`:'');
+        q('[data-old]').setAttribute('d',proposal&&state.step<4?`M ${x} ${y} Q ${w*.42} ${h*.82} ${w*.79} ${h*.69}`:state.push?`M ${x} ${y} L ${w*.5} ${h*.55}`:'');
+        const cx=w*(.39+.30*state.bend),cy=h*(.43-.17*state.bend);
+        q('[data-route]').setAttribute('d',proposal&&(state.step!==2||state.simulated)?`M ${x} ${y} C ${cx} ${cy} ${w*.63} ${h*(.45+.34*state.bend)} ${hx} ${hy}`:'');
+        circle('[data-field]',cx,cy,59-14*state.bend);circle('[data-handle]',cx,cy);circle('[data-handle-dot]',cx,cy);q('[data-handle-dot]').style.display=proposal&&state.step<4?'':'none';
+        q('[data-field]').style.display=q('[data-handle]').style.display=proposal&&state.step<4?'':'none';
+        q('[data-handle]').style.pointerEvents=state.step===2&&!state.simulated?'none':'auto';
+        label('[data-route-label]',12,h*.94,state.step===0?(state.push?'Push preview · home direction unknown':'Start with a free preview'):state.step===1?'Direct push · over budget':state.step===4?'':eco?'Adjusted route · illustrative preview':state.simulated?'Simulated route · within budget':'Proposed field · not yet simulated');
+      }
+      function render(){
+        let r=rows[state.step];
+        set('heading',state.framing==='action'&&state.step===2?'Bend a route home.':r.heading);
+        set('message',state.paused?'Paused. Inspect the route or revise it.':state.step===4&&!choseEconomy?'You kept the faster route. Home with more time left.':state.brief?r.message:r.long);
+        ['primary','label-a','label-b','value-a','value-b','cost'].forEach((key,i)=>set(key,[r.primary,r.a,r.b,r.av,r.bv,r.cost][i]));
+        const phase=state.step===0?0:state.step<3?1:state.step===3?2:3;
+        q('[data-progress]').innerHTML=['1 · Try','2 · Simulate','3 · Revise','4 · Travel'].map((s,i)=>i===phase?'<strong>'+s+'</strong>':s).join(' &nbsp; / &nbsp; ');
+        set('next',state.step===0?(state.push?'ASK ASTRA':'TRY FIRST'):state.step===1?'ASTRA FOUND HOME':state.step===2?(state.simulated?'SIMULATION RESULT':'ASTRA RECOMMENDS'):state.step===3?'REVISED SIMULATION':'ARRIVAL');
+        set('status',state.step===0?(state.push?'Investigation: 6 credits':'Free preview · no fuel spent'):state.step===1?'No fuel spent':state.step<4?'Preview only · no fuel spent':'Example outcome');
+        q('[data-quote]').hidden=state.step===0||(state.step===2&&!state.simulated);
+        if(state.step===0&&state.push){set('message','You can make a move—but is it homeward? Astra can locate home.');set('primary','Find a route with Astra');}
+        if(state.step===2&&state.simulated){set('heading','A route within reach.');set('message','We can get home—but with only 2.04 fuel left. Try asking for more reserve.');set('primary','Can we use less fuel?');}
+        if(state.step===4&&!choseEconomy){set('value-a','2.04');set('value-b','205.1');}
+        set('fuel',state.step===4?(choseEconomy?'7.28':'2.04'):'22');set('credits',state.step===0?'15':'9');set('years',state.step===4?(choseEconomy?'28.5':'205.1'):'500');
+        q('[data-secondary]').hidden=!r.secondary;q('[data-secondary]').textContent=r.secondary||'';
+        q('[data-secondary]').classList.toggle('wh-ghost',state.step===0);
+        if(state.step===0&&state.push)q('[data-secondary]').hidden=true;
+        if(state.step===2&&state.simulated){q('[data-secondary]').hidden=false;q('[data-secondary]').textContent='Run now';}
+        q('[data-interrupt]').hidden=state.step<2||state.step>3;q('[data-interrupt]').textContent=state.paused?'Resume':'Interrupt';
+        q('[data-handle-control]').hidden=state.step<2||state.step>3||(state.step===2&&!state.simulated);range.value=Math.round(state.bend*1000);
+        q('[data-bend-value]').textContent=(state.bend*100).toFixed(1)+'%';
+        range.setAttribute('aria-valuetext',(state.bend*100).toFixed(1)+' percent toward less fuel');
+        if(state.step>=2&&(state.simulated||state.step===4)){const t=trip();set('value-a',(22-t.fuel).toFixed(2));set('value-b',(500-t.years).toFixed(1));set('cost',`Trip: ${t.fuel.toFixed(2)} fuel · ${t.years.toFixed(1)} years · braking included${state.bend>0&&state.bend<1?' · illustrative estimate':''}`);}
+        if(state.step===3){set('heading','Fine-tune your route.');set('message','Adjust the glowing handle or slider. Compare the fuel and time before you run.');set('next','ADJUSTED PREVIEW');}
+        if(state.step===2&&state.simulated)set('message','Try bending the field to save fuel. The route updates as you drag.');
+        if(state.step===4){const t=trip();set('fuel',(22-t.fuel).toFixed(2));set('years',(500-t.years).toFixed(1));set('message','Your chosen route reaches home in this illustrative preview.');}
+        set('details',state.step===0?'Position and home direction are unresolved. Previewing a push spends no fuel.':'Concept uses recorded engine results for two routes. Intermediate values are linearly interpolated for interaction design, not physics predictions. Scene paths and dialogue are illustrative; no live model or physics runs here. Four ranges solve position; held-out measurements check the fix. Credits: 6 spent. Trip totals include braking.');
+        root.querySelectorAll('[data-stage]').forEach(b=>b.setAttribute('aria-current',Number(b.dataset.stage)===state.step?'step':'false'));
+        const showResources=state.step>=2&&(state.simulated||state.step===4);
+        q('[data-resources]').hidden=!showResources;
+        q('.wh-stats').hidden=showResources;
+        if(showResources){
+          const t=trip(),fuelLeft=22-t.fuel,timeLeft=500-t.years;
+          set('resource-title',state.step===4?'Budget at arrival':'Budget after this trip');
+          set('fuel-left',fuelLeft.toFixed(2)+' left');set('time-left',timeLeft.toFixed(1)+' years left');
+          q('[data-fuel-used]').style.width=(t.fuel/22*100)+'%';
+          q('[data-time-used]').style.width=(t.years/500*100)+'%';
+          q('[data-fuel-bar]').setAttribute('aria-label',`${t.fuel.toFixed(2)} of 22 fuel used, ${fuelLeft.toFixed(2)} left. Original route uses 19.96.`);
+          q('[data-time-bar]').setAttribute('aria-label',`${t.years.toFixed(1)} of 500 years used, ${timeLeft.toFixed(1)} left. Original route uses 294.9.`);
+          set('tradeoff',state.bend===0?'Original route · most time left':`${(19.96-t.fuel).toFixed(2)} fuel saved · ${(t.years-294.9).toFixed(1)} extra years vs original${state.bend<1?' · illustrative estimate':''}`);
+        }
+        draw();
+      }
+      root.querySelectorAll('[data-stage]').forEach(b=>b.onclick=()=>{if(Number(b.dataset.stage)===4)choseEconomy=state.step!==2;state.step=Number(b.dataset.stage);state.simulated=state.step>=3;state.bend=state.step>=3?1:0;state.paused=false;render();});
+      q('[data-primary]').onclick=()=>{state.paused=false;if(state.step===4){state.step=0;state.bend=0;state.push=false;state.simulated=false;}else if(state.step===0&&!state.push){state.push=true;}else if(state.step===2&&!state.simulated){state.simulated=true;}else{if(state.step===3){choseEconomy=state.bend>0;}else if(state.step===2)state.bend=1;state.step++;}render();};
+      q('[data-secondary]').onclick=()=>{if(state.step===0){state.step=1;}else if(state.step===2){choseEconomy=false;state.step=4;}else{choseEconomy=false;state.bend=0;state.step=2;state.simulated=true;}render();};
+      function adjust(value){state.bend=Math.max(0,Math.min(1,value));state.step=state.bend>0?3:2;state.simulated=true;render();}
+      range.oninput=()=>adjust(Number(range.value)/1000);
+      const handle=q('[data-handle]');
+      handle.style.cursor='grab';handle.style.touchAction='none';
+      let drag=null;
+      handle.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();handle.setPointerCapture(e.pointerId);drag={id:e.pointerId,x:e.clientX,y:e.clientY};handle.style.cursor='grabbing';};
+      handle.onpointermove=e=>{if(!drag||e.pointerId!==drag.id)return;const box=q('.wh-scene'),dx=box.clientWidth*.30,dy=-box.clientHeight*.17;const delta=((e.clientX-drag.x)*dx+(e.clientY-drag.y)*dy)/(dx*dx+dy*dy);drag.x=e.clientX;drag.y=e.clientY;adjust(state.bend+delta*(e.shiftKey?.1:1));};
+      const finish=()=>{drag=null;handle.style.cursor='grab';};
+      handle.onpointerup=e=>{finish();if(handle.hasPointerCapture(e.pointerId))handle.releasePointerCapture(e.pointerId);};
+      handle.onpointercancel=finish;handle.onlostpointercapture=finish;
+      q('[data-interrupt]').onclick=()=>{state.paused=!state.paused;render();};
+      new ResizeObserver(draw).observe(q('.wh-scene'));render();
+      if(globalThis.Tweak){const t=new Tweak({container:root,onChange:render});t.addToggle(state,'brief',{label:'Minimal copy'});t.addSelect(state,'framing',{label:'Discovery headline',options:[{label:'Capability discovery',value:'discovery'},{label:'Direct action',value:'action'}]});}
+    })();
+  </script>
+</div>
