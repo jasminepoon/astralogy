@@ -43,7 +43,7 @@ body:not(.arrived) #arrival-plate{transition:none}
  #outcome-card{top:120px;padding:13px 16px;max-height:calc(100% - 430px);display:flex;flex-direction:column}
  #outcome-state{order:0;margin-bottom:7px}#outcome-title{order:1;font-size:20px;margin-bottom:8px}
  #outcome-description{order:2;font-size:11px!important;line-height:1.5!important;margin-bottom:8px}
- #gravity-handle:not([hidden])~#outcome-card #outcome-description{display:none}
+
  #outcome-metrics{order:3;gap:8px;margin:8px 0 10px}#outcome-metrics strong{font-size:13px;line-height:1.4}#outcome-metrics small{font-size:9px;margin-bottom:2px}
  #quote-constraint{order:4;font-size:9px;padding:6px 8px;margin-bottom:7px}
  #execution-notice{order:5;margin:0 0 7px;font-size:9px}
@@ -56,3 +56,26 @@ body:not(.arrived) #arrival-plate{transition:none}
 
 #outcome-actions .control{flex:1 1 0;min-width:0;white-space:normal}
 @media(min-width:701px) and (max-height:950px){#outcome-card{max-height:calc(100% - 422px)}#budget-panel{padding-top:14px;padding-bottom:14px}#outcome-actions{flex-shrink:0}}
+
+#help-plan{width:100%;margin:0 0 8px}#plan-mode,#drive-mode{min-height:32px;font-size:11px}#budget-panel #delegation-note{font-size:9px;margin-top:9px}
+@media(min-width:701px) and (max-height:950px){#outcome-card{max-height:calc(100% - 442px)}#outcome-metrics{margin:4px 0 7px;gap:6px}#outcome-details{margin-top:0}#outcome-description{margin-bottom:4px}#quote-constraint{padding:4px 6px}#outcome-title{font-size:18px}#outcome-actions .control{min-height:38px;padding:6px}}
+
+#route-budget{position:absolute;left:44px;top:445px;width:min(480px,calc(100% - 440px));z-index:3;padding:12px 16px;background:#0b1523e8}#route-budget[hidden]{display:none}#route-budget .resource-row{margin-bottom:10px}.resource-row>div:first-child{display:flex;justify-content:space-between;gap:8px;font-size:10px;margin-bottom:6px;color:#b5c2d0;font-variant-numeric:tabular-nums}.resource-row strong{font-weight:500;color:#e2f2f4}.resource-track{height:9px;background:#8cdce4;position:relative;display:flex}.resource-track>span{background:#3d5064;height:100%}.resource-track>i{position:absolute;top:-3px;bottom:-3px;width:1px;background:#f0f5fb}.resource-track.over-budget{outline:1px solid #e7a98c}.resource-legend{display:flex;gap:14px;font-size:9px;color:#a8b8ca}.resource-legend span{display:flex;gap:5px;align-items:center}.resource-legend i{width:9px;height:7px;background:#3d5064}.resource-legend i.left{background:#8cdce4}.resource-legend i.baseline{width:1px;height:10px;background:#fff}#route-tradeoff{font-size:11px;color:#a4e5ed;margin:9px 0}#route-budget label{display:flex;justify-content:space-between;font-size:10px;color:#c3d6e4}#field-strength{display:block;width:100%;height:44px;accent-color:#8cdce4;margin:0;touch-action:none}#route-budget>small{font-size:9px;color:#9cacbd}body:has(#route-budget:not([hidden])) #astra-strip{max-height:155px}body:has(#route-budget:not([hidden])) #astra-message{max-height:37px}body:has(#route-budget:not([hidden])) #route-budget{top:270px;left:auto;right:380px;width:270px}body:has(#route-budget:not([hidden])) .scene-tools{bottom:204px}body:has(#route-budget:not([hidden])) #scene-caption{bottom:249px}body:has(#route-budget:not([hidden])) #map-legend{bottom:274px}
+@media(max-width:1100px) and (min-width:701px){body:has(#route-budget:not([hidden])) #route-budget{right:325px;width:235px;top:245px}}
+@media(max-width:700px){body:has(#route-budget:not([hidden])) #route-budget{top:485px;left:24px;right:24px;width:auto;padding:10px 14px}body:has(#route-budget:not([hidden])) .scene-tools{top:745px;bottom:auto}body:has(#route-budget:not([hidden])) #scene-caption{top:714px;bottom:auto}body:has(#route-budget:not([hidden])) #map-legend{top:465px;bottom:auto}body:has(#route-budget:not([hidden])) #flight-deck{padding-top:830px}body:has(#route-budget:not([hidden])) #astra-strip{max-height:none}body:has(#route-budget:not([hidden])) #astra-message{max-height:100px}}
+
+@media(min-width:701px){body:has(#route-budget:not([hidden])) .scene-tools{top:244px;bottom:auto;max-width:560px}body:has(#route-budget:not([hidden])) #scene-caption{top:479px;bottom:auto}body:has(#route-budget:not([hidden])) #map-legend{top:451px;bottom:auto;max-width:550px;flex-wrap:wrap}}
+
+.resource-title{font-size:10px;color:#c4d2df;margin:0 0 10px}
+
+.chapter-launch{position:absolute;z-index:5;top:82px;left:44px;border:0;background:transparent;color:#aebed0;font-size:10px;padding:4px 0;cursor:pointer}#replay-label{position:absolute;top:105px;left:44px;z-index:5;color:#8edee7;font-size:10px}#chapters-dialog{width:min(640px,calc(100% - 40px));max-height:calc(100% - 50px);padding:24px;background:#0e1927;color:#e2ecf5;border:1px solid #53677c;border-radius:12px}#chapters-dialog::backdrop{background:#020711bb}#chapters-dialog h2{font-size:26px;margin:16px 0}#chapter-tabs{display:flex;flex-wrap:wrap;gap:7px}#chapters-dialog button,#chapter-replay{border:1px solid #3e556c;border-radius:6px;background:#142436;color:#d7e6f3;padding:9px 12px;min-height:40px;font-size:12px;cursor:pointer}#chapter-tabs [aria-pressed=true]{background:#184151;border-color:#8bdded}#chapters-dialog p{font-size:13px;line-height:1.65;color:#b5c6d8}#chapter-replay{display:inline-block;text-decoration:none;background:#164351}#chapters-close{float:right}.chapter-note{font-size:11px!important}#chapter-checkpoint{clear:both}
+@media(max-width:700px){.chapter-launch{top:71px;left:24px}#replay-label{top:161px;left:24px;font-size:9px}}
+
+#return-replay{position:absolute;top:82px;left:145px;z-index:5;font-size:10px;padding:4px;background:transparent;border:0;color:#aebed0}
+
+@media(min-width:701px){body:has(#route-budget:not([hidden])) #route-budget{padding-top:10px;padding-bottom:8px}#route-tradeoff{margin:6px 0;font-size:10px}#route-budget .resource-row{margin-bottom:8px}.resource-title{margin-bottom:8px}#field-strength{height:40px}#handle-hint{max-width:170px}}
+
+#star-context{position:absolute;z-index:3;top:240px;right:380px;width:270px;padding:12px;background:#0c1727e8}#star-context[hidden]{display:none}#star-context strong{font-size:12px}#star-context svg{width:100%;display:block}#star-context small{font-size:9px;color:#aebed0;display:block}body.arrived .scene-tools{opacity:.55}
+@media(max-width:700px){#star-context{top:478px;left:24px;right:24px;width:auto}body:has(#star-context:not([hidden])) #flight-deck{padding-top:800px}body:has(#star-context:not([hidden])) .scene-tools{top:709px}body:has(#star-context:not([hidden])) #scene-caption{top:682px}}
+
+@media(min-width:701px){body:has(#route-budget:not([hidden])) #astra-strip{padding:12px 18px}body:has(#route-budget:not([hidden])) #astra-message{margin:8px 0;line-height:1.45}body:has(#route-budget:not([hidden])) .astra-name{margin-bottom:4px}}

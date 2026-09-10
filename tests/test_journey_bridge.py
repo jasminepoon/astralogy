@@ -47,3 +47,13 @@ class JourneyBridge(unittest.TestCase):
         for key,value in [('field',{'centerShip':[.01,0,0],'duration':1.57,'strength':1,'miss':0,'fullTripFuel':20,'onwardMode':'none'}),('comparison',{'years':2,'attemptFuel':2,'alternativeFuel':10,'attemptHomeProgress':-.2,'alternativeHomeProgress':.1})]:
             data=request();data['choices'][0][key]=value
             with self.assertRaises(ValueError):server.validate_journey_request(data)
+
+    def test_plan_permission_is_distinct_from_delegation_and_must_be_boolean(self):
+        data=request();data['observation']['delegated']=False;data['observation']['planning']=True
+        self.assertEqual(server.validate_journey_request(data),data)
+        proposal={'summary':'Propose calibration for Plan.','actionId':'q1','preference':'keep'}
+        self.assertEqual(server.validate_journey_result(proposal,data),proposal)
+        data['observation']['planning']=False
+        with self.assertRaises(ValueError):server.validate_journey_result(proposal,data)
+        data['observation']['planning']='true'
+        with self.assertRaises(ValueError):server.validate_journey_request(data)

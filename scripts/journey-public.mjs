@@ -39,6 +39,7 @@ const o = x.observation;
 keys(o, [
   "phase",
   "delegated",
+  ...(Object.hasOwn(o,"planning")?["planning"]:[]),
   "resources",
   "budgetRemaining",
   "preference",
@@ -47,6 +48,7 @@ keys(o, [
   "asteroid",
 ], ["attempt"]);
 check(typeof o.delegated === "boolean");
+if(Object.hasOwn(o,"planning"))check(typeof o.planning === "boolean");
 check(
   ["unknown", "calibrated", "travel", "at-stop", "mined", "arrived"].includes(
     o.phase,

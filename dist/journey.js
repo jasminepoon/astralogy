@@ -159,11 +159,14 @@ export class Journey {
   #state;
   #attempt=null;
   #undo=null;
+  #lights=new Map();
+  #lightKeys=new Map();
   constructor(
     features,
-    { seed = Math.floor(Math.random() * 2 ** 32), spawnIndex, balance, velocity } = {},
+    { seed = Math.floor(Math.random() * 2 ** 32), spawnIndex, balance, velocity, mode = "drive" } = {},
   ) {
     this.#catalogue = catalogueWorld(features);
+    for(const star of this.#catalogue){const token=crypto.randomUUID();this.#lights.set(token,star);this.#lightKeys.set(star.id,token);}
     const index = spawnIndex ?? hash(seed) % this.#catalogue.length;
     if (
       !Number.isInteger(index) ||
@@ -184,6 +187,7 @@ export class Journey {
     this.#truth = { index, p, r };
     this.#state = {
       revision: 0,
+      mode,
       phase: "unknown",
       p,
       v: velocity ? [...velocity] : [0.003, -0.002, 0.004],
@@ -198,6 +202,8 @@ export class Journey {
       active: false,
       preference: "balanced",
       calibration: null,
+      identifiedLights:[],
+      tagCredits:0,
       report: null,
       deposit: { fuel: 32, credits: 8 },
       target: null,
@@ -220,7 +226,7 @@ export class Journey {
         ...(identified ? { catalogueId: s.id, range: d } : {}),
       }));
   }
-  sky(){const rt=transpose(this.#truth.r);return this.#catalogue.map(star=>({bearing:unit(rotate(rt,V.sub(star.p,this.#state.p))),brightness:Math.max(.15,Math.min(1,(7-star.mag)/6))})).sort((a,b)=>a.bearing[0]-b.bearing[0]);}
+  sky(){const rt=transpose(this.#truth.r);return this.#catalogue.map(star=>({observationId:this.#lightKeys.get(star.id),bearing:unit(rotate(rt,V.sub(star.p,this.#state.p))),brightness:Math.max(.15,Math.min(1,(7-star.mag)/6))})).sort((a,b)=>a.bearing[0]-b.bearing[0]);}
   shipVector(v){if(!this.#state.calibration)throw Error('Orientation unresolved');return rotate(transpose(this.#state.calibration.orientation),v);}
   get revision() {
     return this.#state.revision;
@@ -229,6 +235,7 @@ export class Journey {
     const s = this.#state;
     const base = {
       revision: s.revision,
+      mode: s.mode,
       phase: s.phase,
       resources: clone(s.resources),
       spent: clone(s.spent),
@@ -236,10 +243,13 @@ export class Journey {
       active: s.active,
       preference: s.preference,
       time: s.time,
+      localPosition:rotate(transpose(this.#truth.r),V.sub(s.p,this.#truth.p)),
       canUndo:!!this.#undo,
       observations: clone(s.observations),
       ledger: clone(s.ledger),
       calibration: clone(s.calibration),
+      identifiedLights:clone(s.identifiedLights),
+      calibrationCredits:6-Math.min(1,s.tagCredits),
       report: clone(s.report),
     };
     if (s.calibration)
@@ -256,6 +266,15 @@ export class Journey {
         anchorId: this.#catalogue[this.#truth.index].id,
       });
     return base;
+  }
+  setBudget(budget) {
+    const s=this.#state;
+    if(!['fuel','credits','lifetime'].every(k=>Number.isFinite(budget[k])&&budget[k]>=s.spent[k]&&budget[k]<=s.resources[k]+s.spent[k]))throw Error('Budget must fit available resources and accumulated spending');
+    if(['fuel','credits','lifetime'].some(k=>budget[k]!==s.budget[k])){s.budget=clone(budget);this.#invalidate();}
+  }
+  setMode(mode) {
+    if(!['plan','drive'].includes(mode))throw Error('Unknown journey mode');
+    this.#state.mode=mode;this.#state.active=false;this.#invalidate();
   }
   delegate(budget = this.#state.budget) {
     if (
@@ -324,7 +343,7 @@ export class Journey {
       detail = {},
       effect = {};
     if (kind === "calibrate") {
-      cost.credits = 6;
+      cost.credits = 6-Math.min(1,s.tagCredits);
       const observations = this.#measure(true);
       const solution = solveCalibration(observations, this.#catalogue);
       detail = {
@@ -475,7 +494,7 @@ export class Journey {
     this.#quotes.set(q.id, { q: clone(q), effect });
     return clone(q);
   }
-  rawQuote({ impulse = 0, gravity = this.#state.gravity } = {}) {
+  rawQuote({ impulse = 0, gravity = this.#state.gravity, flightYears=0 } = {}) {
     const s = this.#state;
     impulse=typeof impulse==="number"?[impulse,0,0]:impulse;
     if (s.target || s.phase === "arrived")
@@ -485,7 +504,7 @@ export class Journey {
     if (
       !Array.isArray(impulse) || impulse.length!==3 || !impulse.every(Number.isFinite) ||
       V.norm(impulse) > 0.02000000001 ||
-      ![0, 1].includes(gravity)
+      ![0, 2].includes(flightYears) || ![0, 1].includes(gravity)
     )
       throw Error("Unsupported experiment");
     const dv = rotate(this.#truth.r, impulse);
@@ -501,6 +520,7 @@ export class Journey {
       reward: { fuel: 0, credits: 0 },
       detail: {
         impulse: dv,
+        flightYears,
         gravityAfter: gravity,
         gravityDuration: s.resources.lifetime,
         summary:
@@ -512,6 +532,18 @@ export class Journey {
       effect: { v: V.add(s.v, dv), gravity },
     });
     return { ...clone(q), detail: { ...q.detail, impulse: [...impulse] } };
+  }
+  identifyQuote(observationId) {
+    const s=this.#state,star=this.#lights.get(observationId);
+    if(!star||s.phase==='arrived')throw Error('Unknown observed light');
+    const known=s.identifiedLights.some(x=>x.observationId===observationId),q={id:`q${++this.#counter}`,revision:s.revision,kind:'identify',cost:{fuel:0,credits:known?0:1,lifetime:0},reward:{fuel:0,credits:0},detail:{summary:'Identify one selected observed light with a synthetic spectral tag; no position fix.'}};
+    this.#quotes.set(q.id,{q:clone(q),effect:{identification:{observationId,catalogueId:star.id,bearing:unit(rotate(transpose(this.#truth.r),V.sub(star.p,s.p)))},known}});return clone(q);
+  }
+  driftQuote(years=.125) {
+    const s=this.#state;
+    if(s.target||s.phase==='arrived'||!Number.isFinite(years)||years<=0||years>.125)throw Error('Unsupported flight checkpoint');
+    const result=integrate(s,years),q={id:`q${++this.#counter}`,revision:s.revision,kind:'drift',cost:{fuel:0,credits:0,lifetime:years},reward:{fuel:0,credits:0},detail:{summary:'Quoted push flight checkpoint',remaining:years}};
+    this.#quotes.set(q.id,{q:clone(q),effect:{p:result.p,v:result.v}});return clone(q);
   }
   preview(id, {frame="world",years:requestedYears}={}) {
     const record = this.#quotes.get(id);
@@ -589,19 +621,25 @@ export class Journey {
       s.budget.fuel - s.spent.fuel - q.cost.fuel + 1e-9 < reserve
     )
       throw Error("Arrival fuel reserve would be breached");
+    if(q.detail.flightYears&&(q.detail.flightYears>s.resources.lifetime||s.spent.lifetime+q.detail.flightYears>s.budget.lifetime))throw Error('Push flight exceeds remaining years');
     if(q.detail.miningComparison){const m=q.detail.miningComparison;if(s.spent.fuel+m.totalFuelSpent>s.budget.fuel+1e-9)throw Error('Full stop and reserved onward route exceed the gross fuel budget');if(m.totalYears>s.resources.lifetime+1e-9||s.spent.lifetime+m.totalYears>s.budget.lifetime+1e-9)throw Error('Full stop and onward route exceed lifetime');if(s.resources.credits<2||s.spent.credits+2>s.budget.credits)throw Error('Extraction credits must be available before taking the detour');}
+    if(q.kind.startsWith('gravity-')&&(q.detail.years>s.resources.lifetime||s.spent.lifetime+q.detail.years>s.budget.lifetime))throw Error('Field route exceeds remaining lifetime');
     if(q.kind.startsWith('gravity-')&&!q.detail.feasible)throw Error('Edited field misses the arrival corridor; no action committed');
   }
   assess(id){const r=this.#quotes.get(id);if(!r||r.q.revision!==this.revision)return {affordable:false,reason:'Stale quote'};try{this.#validateCost(r.q);return {affordable:true,reason:null};}catch(e){return {affordable:false,reason:e.message};}}
-  commit(id) {
+  commit(id, {manual=false, enterDrive=false, investigation=false} = {}) {
     const record = this.#quotes.get(id),
       s = this.#state;
     if (!record || record.q.revision !== s.revision)
       throw Error("Stale or already committed quote");
-    if (!s.active) throw Error("Astra is paused; delegate before committing");
     const { q, effect } = record;
+    if(s.mode==='plan'&&!enterDrive&&!(investigation&&['calibrate','identify'].includes(q.kind)))throw Error('Plan retains previews; Apply & fly before movement');
+    if(enterDrive&&!manual)throw Error('Only a reviewed manual action may enter Drive');
+    if(!s.active&&!manual&&!(investigation&&['calibrate','identify'].includes(q.kind)))throw Error('Execution is paused');
     this.#validateCost(q);
     if(q.kind.startsWith("gravity-"))this.#undo={state:clone(s),attempt:clone(this.#attempt)};
+    if(enterDrive)s.mode="drive";
+    if(manual)s.active=!!q.kind.startsWith("gravity-")||!!q.detail.flightYears;
     for (const key of ["fuel", "credits", "lifetime"]) {
       s.resources[key] -= q.cost[key];
       s.spent[key] += q.cost[key];
@@ -609,6 +647,7 @@ export class Journey {
     s.resources.fuel += q.reward.fuel;
     s.resources.credits += q.reward.credits;
     s.time += q.cost.lifetime;
+    if(q.kind==="identify"&&!effect.known){s.identifiedLights.push(effect.identification);s.tagCredits++;}
     if (q.kind === "calibrate") {
       s.calibration = effect.solution;
       s.p = [...effect.solution.position];
@@ -628,6 +667,7 @@ export class Journey {
       s.target = effect.target;
       s.phase = "travel";
     }
+    if(q.kind==="drift"){s.p=effect.p;s.v=effect.v;}
     if (q.kind === "coast") {
       s.p = effect.p;
       s.v = effect.v;
