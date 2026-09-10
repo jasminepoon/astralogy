@@ -39,7 +39,7 @@ body.arrived #map-legend{display:none}
 /* Undo and reset immediately remove the arrival plate. Only verified arrival fades in. */
 body:not(.arrived) #arrival-plate{transition:none}
 /* On short desktops, keep the computed comparison and countdown in view. */
-@media(min-width:701px) and (max-height:820px){
+@media(min-width:701px) and (max-height:950px){
  #outcome-card{top:120px;padding:13px 16px;max-height:calc(100% - 430px);display:flex;flex-direction:column}
  #outcome-state{order:0;margin-bottom:7px}#outcome-title{order:1;font-size:20px;margin-bottom:8px}
  #outcome-description{order:2;font-size:11px!important;line-height:1.5!important;margin-bottom:8px}
@@ -55,4 +55,4 @@ body:not(.arrived) #arrival-plate{transition:none}
 @media(max-width:700px){#handle-hint{max-width:calc(100% - 48px);font-size:12px}#handle-hint small{font-size:11px}}
 
 #outcome-actions .control{flex:1 1 0;min-width:0;white-space:normal}
-@media(min-width:701px) and (max-height:820px){#outcome-card{max-height:calc(100% - 422px)}#budget-panel{padding-top:14px;padding-bottom:14px}#outcome-actions{flex-shrink:0}}
+@media(min-width:701px) and (max-height:950px){#outcome-card{max-height:calc(100% - 422px)}#budget-panel{padding-top:14px;padding-bottom:14px}#outcome-actions{flex-shrink:0}}
