@@ -57,3 +57,12 @@ class JourneyBridge(unittest.TestCase):
         with self.assertRaises(ValueError):server.validate_journey_result(proposal,data)
         data['observation']['planning']='true'
         with self.assertRaises(ValueError):server.validate_journey_request(data)
+
+    def test_current_manual_preview_is_public_bounded_and_cannot_leak_unknown_geometry(self):
+        data=request();data['choices'][0]['currentPreview']=True
+        with self.assertRaises(ValueError):server.validate_journey_request(data)
+        data['observation'].update(phase='calibrated',landmarks=[],navigation={'distance':12,'speed':.12,'target':'none','remaining':0,'calibrationResidual':0})
+        choice=data['choices'][0];choice.update(kind='gravity-home',field={'centerShip':[.01,0,0],'duration':1.57,'strength':1,'miss':0,'fullTripFuel':17.76,'fullTripYears':349.9,'fullTripCredits':0,'onwardMode':'none'})
+        self.assertEqual(server.validate_journey_request(data),data)
+        choice['field']['fullTripYears']=-1
+        with self.assertRaises(ValueError):server.validate_journey_request(data)

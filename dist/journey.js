@@ -633,9 +633,9 @@ export class Journey {
     if (!record || record.q.revision !== s.revision)
       throw Error("Stale or already committed quote");
     const { q, effect } = record;
-    if(s.mode==='plan'&&!enterDrive&&!(investigation&&['calibrate','identify'].includes(q.kind)))throw Error('Plan retains previews; Apply & fly before movement');
+    if(s.mode==='plan'&&!enterDrive&&!(investigation&&['calibrate','identify','survey'].includes(q.kind)))throw Error('Plan retains previews; Apply & fly before movement');
     if(enterDrive&&!manual)throw Error('Only a reviewed manual action may enter Drive');
-    if(!s.active&&!manual&&!(investigation&&['calibrate','identify'].includes(q.kind)))throw Error('Execution is paused');
+    if(!s.active&&!manual&&!(investigation&&['calibrate','identify','survey'].includes(q.kind)))throw Error('Execution is paused');
     this.#validateCost(q);
     if(q.kind.startsWith("gravity-"))this.#undo={state:clone(s),attempt:clone(this.#attempt)};
     if(enterDrive)s.mode="drive";

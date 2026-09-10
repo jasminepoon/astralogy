@@ -76,6 +76,13 @@ body:not(.arrived) #arrival-plate{transition:none}
 @media(min-width:701px){body:has(#route-budget:not([hidden])) #route-budget{padding-top:10px;padding-bottom:8px}#route-tradeoff{margin:6px 0;font-size:10px}#route-budget .resource-row{margin-bottom:8px}.resource-title{margin-bottom:8px}#field-strength{height:40px}#handle-hint{max-width:170px}}
 
 #star-context{position:absolute;z-index:3;top:240px;right:380px;width:270px;padding:12px;background:#0c1727e8}#star-context[hidden]{display:none}#star-context strong{font-size:12px}#star-context svg{width:100%;display:block}#star-context small{font-size:9px;color:#aebed0;display:block}body.arrived .scene-tools{opacity:.55}
-@media(max-width:700px){#star-context{top:478px;left:24px;right:24px;width:auto}body:has(#star-context:not([hidden])) #flight-deck{padding-top:800px}body:has(#star-context:not([hidden])) .scene-tools{top:709px}body:has(#star-context:not([hidden])) #scene-caption{top:682px}}
+@media(max-width:700px){#star-context{top:450px;left:24px;right:24px;width:auto}#star-context svg{height:150px}body:has(#star-context:not([hidden])) #flight-deck{padding-top:800px}body:has(#star-context:not([hidden])) .scene-tools{top:709px}body:has(#star-context:not([hidden])) #scene-caption{top:682px}}
 
 @media(min-width:701px){body:has(#route-budget:not([hidden])) #astra-strip{padding:12px 18px}body:has(#route-budget:not([hidden])) #astra-message{margin:8px 0;line-height:1.45}body:has(#route-budget:not([hidden])) .astra-name{margin-bottom:4px}}
+
+/* Keep the scene, next action and control consequences distinct. */
+#phase-label{display:none}#outcome-state{font-size:9px}#delegation-note{font-size:10px}#investigate-stop{font-size:11px}body[data-journey-state="ready"] #scene-description{max-width:440px}.scene-tools{flex-wrap:wrap}#help-plan{margin-bottom:6px}
+
+#mining-comparison,.budget-rule{font-size:10px;color:#b2c4d0;margin:8px 0}#mining-comparison p,.budget-rule p{line-height:1.5}.budget-title{gap:8px}.budget-title span{max-width:140px;text-align:right}#scene-description:empty{display:none}#chat-form{flex-wrap:wrap}#chat-form input{flex:1 1 220px}#investigate-stop{white-space:normal!important;text-align:left}body:has(#route-budget:not([hidden])) #astra-strip{max-height:200px}body:has(#route-budget:not([hidden])) #astra-message{max-height:70px}#astra-message{scrollbar-width:thin}
+@media(max-width:700px){body:has(#route-budget:not([hidden])) #astra-strip{max-height:none}#chat-form input{flex-basis:65%}}
+@media(max-width:700px){#flight-deck{padding-top:780px}body:has(#route-budget:not([hidden])) #flight-deck{padding-top:950px}body:has(#star-context:not([hidden])) #flight-deck{padding-top:915px}}

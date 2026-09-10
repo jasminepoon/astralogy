@@ -108,11 +108,13 @@ if (o.asteroid !== null) {
 }
 if(o.attempt!==undefined&&o.attempt!==null){const a=o.attempt;keys(a,['impulse','fuel','years','committed']);check(vec(a.impulse)&&Math.hypot(...a.impulse)<=.020000001&&num(a.fuel)&&num(a.years,0,8)&&typeof a.committed==='boolean');}
 check(
-  Array.isArray(x.choices) && x.choices.length <= 5 && x.choices.length > 0,
+  Array.isArray(x.choices) && x.choices.length <= 6 && x.choices.length > 0,
 );
+check(x.choices.filter(c=>c.currentPreview===true).length<=1);
 const ids = new Set();
 for (const c of x.choices) {
-  keys(c, ["id", "kind", "cost", "summary", "years", "reserve", "evidence"], ["affordable","reason","field","comparison"]);
+  keys(c, ["id", "kind", "cost", "summary", "years", "reserve", "evidence"], ["affordable","reason","field","comparison","currentPreview"]);
+  if(c.currentPreview!==undefined)check(typeof c.currentPreview==='boolean'&&(!c.currentPreview||(o.phase!=='unknown'&&c.kind.startsWith('gravity-'))));
   if(c.affordable!==undefined)check(typeof c.affordable==='boolean');
   if(c.reason!==undefined&&c.reason!==null)check(str(c.reason,200));
   check(str(c.id, 30) && !ids.has(c.id));
@@ -136,7 +138,7 @@ for (const c of x.choices) {
       num(c.years) &&
       num(c.reserve),
   );
-  if(c.field!==undefined&&c.field!==null){check(o.phase!=='unknown');const f=c.field;keys(f,['centerShip','duration','strength','miss','fullTripFuel','onwardMode']);check(vec(f.centerShip)&&Math.hypot(...f.centerShip)<=.100001&&num(f.duration,0,2)&&num(f.strength,0,1)&&num(f.miss)&&num(f.fullTripFuel)&&['none','direct-slow'].includes(f.onwardMode));}
+  if(c.field!==undefined&&c.field!==null){check(o.phase!=='unknown');const f=c.field;keys(f,['centerShip','duration','strength','miss','fullTripFuel','onwardMode'],['fullTripYears','fullTripCredits']);for(const k of ['fullTripYears','fullTripCredits'])if(f[k]!==undefined)check(num(f[k]));check(vec(f.centerShip)&&Math.hypot(...f.centerShip)<=.100001&&num(f.duration,0,2)&&num(f.strength,0,1)&&num(f.miss)&&num(f.fullTripFuel)&&['none','direct-slow'].includes(f.onwardMode));}
   if(c.comparison!==undefined&&c.comparison!==null){check(o.phase!=='unknown');const a=c.comparison;keys(a,['years','attemptFuel','alternativeFuel','attemptHomeProgress','alternativeHomeProgress']);check(num(a.years,0,8)&&num(a.attemptFuel)&&num(a.alternativeFuel)&&num(a.attemptHomeProgress,-1e5,1e5)&&num(a.alternativeHomeProgress,-1e5,1e5));}
   const e = c.evidence;
   keys(e, [
