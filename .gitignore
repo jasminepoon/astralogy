@@ -3,3 +3,6 @@ __pycache__/
 output/
 .sites-runtime/
 .playwright-cli/
+
+# Keep project notes local.
+*.md

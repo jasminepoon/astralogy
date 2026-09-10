@@ -1,787 +1,145 @@
-import { Journey, V } from "./journey.js";
-const $ = (s) => document.querySelector(s),
-  fmt = (v, n = 1) =>
-    Number(v).toLocaleString(undefined, { maximumFractionDigits: n }),
-  escape = (s) =>
-    String(s).replace(
-      /[&<>"']/g,
-      (c) =>
-        ({
-          "&": "&amp;",
-          "<": "&lt;",
-          ">": "&gt;",
-          '"': "&quot;",
-          "'": "&#39;",
-        })[c],
-    );
-const features = (await (await fetch("./stars.json")).json()).features;
-let seed = 93741,
-  game = new Journey(features, { seed }),
-  epoch = 0,
-  request = null,
-  pending = null,
-  preview = null,
-  history = [],
-  selected = "L1",
-  yaw = 0.25,
-  pitch = 0.3,
-  zoom = 1,
-  previousRoute = null,
-  hasDelegated = false,
-  autoMining = false;
-const labels = {
-  calibrate: "Calibrate the sky",
-  survey: "Inspect the asteroid",
-  "launch-stop": "Intercept the asteroid",
-  "launch-home": "Set course for home",
-  coast: "Coast to checkpoint",
-  brake: "Brake and verify",
-  extract: "Extract the finite deposit",
-  experiment: "Raw physics experiment",
-};
-function say(role, text, source) {
-  const article = document.createElement("article");
-  article.className = role;
-  const small = document.createElement("small");
-  small.textContent = source ?? (role === "user" ? "YOU" : "LIVE ASTRA");
-  const p = document.createElement("p");
-  p.textContent = text;
-  article.append(small, p);
-  $("#conversation").append(article);
-  $("#conversation").scrollTop = 1e6;
-  if (role === "user" || source === "LIVE ASTRA" || !source)
-    history.push({
-      role: role === "user" ? "user" : "assistant",
-      text: text.slice(0, 800),
-    });
-  history = history.slice(-16);
+import {renderConstellationPreview} from './constellation-preview.js';
+import {Constellation} from './vendor/astronomy.js';
+import {Journey,V} from './journey.js';
+import {BrushScene} from './brush-scene.js';
+import {initializeControls,actionButton,syncControls} from './control-ui.js';
+const $=s=>document.querySelector(s),fmt=(v,n=1)=>Number(v).toLocaleString(undefined,{maximumFractionDigits:n}),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const features=(await(await fetch('./stars.json')).json()).features;
+const constellationLines=(await(await fetch('./constellations.json')).json()).features;
+const replayChapter=new URLSearchParams(location.search).get("replay");
+const DEMO={seed:93741,balance:replayChapter==='mining'?{fuel:35,credits:15,lifetime:550}:{fuel:22,credits:15,lifetime:500},velocity:[.12,.01,.02],mode:"plan"};
+let routeBaseline=null;
+let driftRemaining=0;
+let helm=false,planAssist=false,routeAuthority=false;
+let seed=DEMO.seed,isDemo=true,game=new Journey(features,DEMO),hasDelegated=false,epoch=0,request=null,history=[],quote=null,preview=null,comparison=null,attemptPath=null,stroke=null,tracers=null,flightPath=null,fieldEdit=null,selected=null,automaticMining=false,plannedOnward=false,lastProposal=null,lastSkyTime=-1,handleEditing=false,advance=false,recordedComparisons=[],previousAlternativePath=null,fieldGoal=null,fuelRevisionPending=false,acceptedFuelRevision=false,uiError=false;
+initializeControls();
+const revisionButton=$('#less-fuel');
+const names={identify:'Identify selected light',drift:'Push flight',calibrate:'Calibrate the same sky',survey:'A possible resource stop','launch-stop':'Set course for the asteroid','launch-home':'The onward route','gravity-home':'Bend the route home','gravity-stop':'Bend toward the resource stop',coast:'Along the computed path',brake:'Braking for arrival',extract:'One finite deposit',experiment:'Your proposed push'};
+const scene=new BrushScene({canvas:$('#journey-map'),skyCanvas:$('#sky-canvas'),onBrush:brush,onBrushBegin:()=>{pause();syncBudget();},onSelect:selectLight,onFieldBegin:beginGesture,onFieldChange:(speed,offset,dy)=>editField(speed,offset,dy),onFieldEnd:()=>releaseField('human')});
+function say(text,source='LIVE ASTRA',role='assistant'){$('#astra-message').textContent=text;const a=document.createElement('article'),s=document.createElement('small'),p=document.createElement('p');s.textContent=role==='user'?'YOU':source;p.textContent=text;a.append(s,p);$('#conversation').append(a);if(role==='user'||source==='LIVE ASTRA'){history.push({role,text:text.slice(0,800)});history=history.slice(-16);}}
+function cancelWork(){epoch++;sliderArmed=false;const sliderId=sliderDrag?.id;sliderDrag=null;if(sliderId!==undefined&&slider.hasPointerCapture(sliderId))slider.releasePointerCapture(sliderId);driftRemaining=0;helm=false;routeAuthority=false;planAssist=false;request?.abort();request=null;scene.cancelGesture();document.body.classList.remove('handle-busy');$('#execution-notice').textContent='';}
+function pause(keep=false){cancelWork();fuelRevisionPending=false;fieldGoal=null;document.body.classList.remove('handle-busy');request?.abort();request=null;$('#execution-notice').textContent='';game.pause();handleEditing=false;if(!keep){quote=null;preview=null;comparison=null;tracers=null;fieldEdit=null;}else if(quote?.kind.startsWith('gravity-')&&!game.view().target){const q=quote;try{setQuote(game.fieldQuote({destination:q.kind==='gravity-stop'?'asteroid':'home',speed:q.detail.requestedSpeed,centerShip:q.detail.centerShip}));}catch{quote=null;preview=null;}}render();}
+function fail(e){pause();acceptedFuelRevision=false;uiError=true;render();say(e.message,'PAUSED · NO ACTION COMMITTED');card({state:'PAUSED',title:'The plan needs a change.',description:e.message,metrics:[],evidence:'No failed or stale action changes resources. Adjust the plan, resume within the original cap, or reset the same sky.'});}
+function card({state,title,description,metrics=[],actions=[],evidence=''}){$('#star-context').hidden=true;$('#outcome-state').textContent=state;$('#outcome-title').textContent=title;$('#outcome-description').textContent=description;$('#outcome-metrics').innerHTML=metrics.map(([label,value])=>`<div><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`).join('');$('#quote-constraint').textContent='';$('#mining-comparison').hidden=true;$('#outcome-metrics').hidden=!metrics.length;$('#outcome-description').hidden=!description;if(revisionButton.parentElement!==$('#chat-form'))$('#chat-form').insertBefore(revisionButton,$('#skip-stop'));$('#outcome-actions').replaceChildren();for(const [label,fn] of actions){const b=label==='Use less fuel'?revisionButton:document.createElement('button');actionButton(b,label);b.onclick=label==='Use less fuel'?requestLessFuel:fn;$('#outcome-actions').append(b);}$('#outcome-evidence').textContent=evidence;renderControls();}
+function setQuote(q){if(q.kind.startsWith('gravity-')&&(!routeBaseline||routeBaseline.kind!==q.kind||routeBaseline.time!==game.view().time||Object.keys(routeBaseline.budget).some(k=>routeBaseline.budget[k]!==game.view().budget[k]))){const v=game.view();routeBaseline={kind:q.kind,time:v.time,fuel:q.detail.miningComparison?.totalFuelSpent??q.cost.fuel+q.detail.braking,years:q.detail.miningComparison?.totalYears??q.detail.years,spent:{...v.spent},budget:{...v.budget}};}quote=q;uiError=false;if(q.kind.startsWith('gravity-')){const revision=recordedComparisons.at(-1);acceptedFuelRevision=Boolean(revision&&revision.kind===q.kind&&Math.abs(q.detail.requestedSpeed-revision.after.speed)<1e-9&&game.assess(q.id).affordable);if(acceptedFuelRevision)fuelRevisionPending=false;}if(q.kind.startsWith('gravity-')||q.kind.startsWith('launch-'))lastProposal=q;preview=game.preview(q.id,{frame:'ship',years:2});comparison=(q.kind.startsWith('gravity-')||q.kind.startsWith('launch-'))?game.compareAttempt(q.id,{years:2}):null;if(q.kind.startsWith('gravity-')){const destination=q.kind==='gravity-stop'?'asteroid':'home',guided=game.fieldQuote({destination,speed:q.detail.requestedSpeed}),offset=V.sub(q.detail.centerShip,guided.detail.centerShip);fieldEdit={destination,speed:q.detail.requestedSpeed,offset,manual:V.norm(offset)>1e-10};tracers=game.fieldTracers(q.id);}else if(q.kind!=='coast')tracers=null;render();renderQuote();}
+function renderQuote(){if(!quote)return;const q=quote,v=game.view(),assessment=game.assess(q.id),after={fuel:v.resources.fuel-q.cost.fuel,credits:v.resources.credits-q.cost.credits,lifetime:v.resources.lifetime-q.cost.lifetime};
+ if(q.kind==='experiment'){card({state:'YOUR PREVIEW · UNCOMMITTED',title:'Preview a push',description:v.calibration?'Compare this push with the route home.':'Home direction is still unknown.',metrics:[['Impulse',`${fmt(V.norm(q.detail.impulse),3)} ly/year`],['Fuel quote',fmt(q.cost.fuel,2)],['Projected fuel left',fmt(after.fuel,2)],['Flight after apply','2 years · interruptible']],actions:[[v.mode==='plan'?'Apply & fly':'Apply push',applyBrush]],evidence:`View-plane vector [${q.detail.impulse.map(x=>fmt(x,4)).join(', ')}] in the ship frame. The two-year ghost uses the actual current position, velocity and gravity. Releasing the push preview spent nothing. ${assessment.reason??'The quoted action fits the current resources.'}`});return;}
+ if(q.kind==='calibrate'){card({state:'MEASURING',title:'Finding our position',description:'Four landmarks locate us; four more check the result.',metrics:[['This investigation',`${fmt(q.cost.credits)} credits`],['Fuel / time','0 / 0'],['Credits afterward',fmt(after.credits)],['Landmarks','4 solve + 4 check']],actions:[['Advance now',()=>advance=true]],evidence:'The scan is an explicitly synthetic ideal range/tag instrument. The solver receives observations and the public synthetic catalogue, never the hidden pose. Your uncommitted stroke and its starting state are preserved.'});return;}
+ if(q.kind==='survey'){card({state:'ASTRA · SPATIAL REPORT',title:'Is the detour worth it?',description:'A stationary asteroid has one polar extraction patch. I’m checking the operation against the route and reserves.',metrics:[['Report','3 credits'],['Possible gross yield','32 fuel + 8 credits'],['Extraction','3 fuel + 2 credits'],['Extraction time','2 years']],actions:[['Advance now',()=>advance=true]],evidence:'The report uses fixed scene geometry: 100 km radius, eight-hour spin, a stationary polar patch and a 0.003 ly game operation region. Report cost remains spent if the stop is declined.'});return;}
+ if(q.kind.startsWith('gravity-')){let direct;try{const d=game.quote('launch-home',{speed:q.detail.requestedSpeed});direct=d.cost.fuel+d.detail.braking;}catch{}const total=q.cost.fuel+q.detail.braking,moving=document.body.classList.contains('handle-busy');const revision=recordedComparisons.at(-1);const showRevision=revision?.kind===q.kind;const mc=q.detail.miningComparison;let explain=mc?`Then a direct, reserved 0.025 ly/year onward leg. Full trip: ${fmt(mc.totalFuelSpent,2)} fuel spent; ${fmt(mc.grossFuel)} recovered. Net ${mc.netFuel>=0?'+':'−'}${fmt(Math.abs(mc.netFuel),2)} fuel.`:'A temporary gravity field can redirect our motion.';
+ card({state:moving?'ASTRA MOVING HANDLE · UNCOMMITTED':assessment.affordable?'GRAVITY EDIT · PREVIEW':'FIELD PREVIEW · REJECTED',title:moving&&fieldGoal?`Setting field: ${fmt(fieldGoal.cost.fuel+fieldGoal.detail.braking,2)} fuel`:names[q.kind],description:moving?'The handle is moving toward the selected route. Values below describe the changing preview; release follows the selected mode.':explain,metrics:[['Apply now',`${fmt(q.cost.fuel,2)} fuel`],[mc?'To stop + brake':'Trip + brake',`${fmt(total,2)} fuel · ${fmt(q.detail.years)} years`]],actions:[['Use less fuel',()=>send('Use less fuel and continue driving.')],[v.mode==='plan'?'Apply & fly':'Apply field',()=>releaseField('human',true)]],evidence:`Force: a = well center − ship position inside a 0.3 ly region. Duration ${fmt(q.detail.duration,4)} years. Handle offset [${q.detail.centerShip.map(x=>fmt(x,4)).join(', ')}] ly. Miss at computed intercept ${q.detail.miss.toExponential(2)} ly. ${comparison?.sameState?`Same starting p/v, 2-year comparison: your push advances ${fmt(comparison.attemptHomeProgress,3)} ly toward home; this field advances ${fmt(comparison.alternativeHomeProgress,3)} ly. This is local progress, not proof that the original push reaches home.`:game.attempt()?'A committed action changed the starting state; the earlier push is retained but is not labeled a same-state comparison.':''} ${assessment.reason??'The field, operation and braking reserves fit the current cap.'}`});let directFieldFits=false;if(mc){try{directFieldFits=game.assess(game.fieldQuote({destination:'home',speed:.025}).id).affordable;}catch{}}if(v.report&&!v.target){try{const stop=mc?q:game.fieldQuote({destination:'asteroid',speed:.025}),m=stop.detail.miningComparison,a=game.assess(stop.id);$('#mining-comparison').hidden=false;$('#mining-comparison-text').textContent=`${a.affordable?'Optional stop.':a.reason+'.'} Full trip: ${fmt(m.totalFuelSpent,2)} fuel spent · ${fmt(m.grossFuel)} recovered · ${fmt(m.totalYears)} years. Extraction needs 3 fuel and 2 credits upfront, after approach and braking. Report: 3 credits already paid. Rewards increase inventory, not spending limits.`;}catch{}}const constraint=$('#quote-constraint');constraint.classList.toggle('rejected',!assessment.affordable);constraint.textContent=!assessment.affordable?assessment.reason:mc?(directFieldFits?'Optional stop; a direct field route also fits. ':'')+`Full trip: ${fmt(mc.totalFuelSpent,2)} fuel spent, ${fmt(mc.grossFuel)} recovered, ${fmt(mc.totalYears)} years.`:direct>Math.min(v.resources.fuel,v.budget.fuel-v.spent.fuel)?`Direct correction + brake: ${fmt(direct,1)} fuel exceeds the ${fmt(Math.min(v.resources.fuel,v.budget.fuel-v.spent.fuel),1)} available cap.`:'Field and braking fit the remaining cap.';return;}
+ if(q.kind==='coast'||q.kind==='drift'){const bending=v.field&&v.time<v.field.until-1e-9;card({state:bending?'FIELD ACTIVE · ACTUAL FLIGHT':'TRAVEL ACCELERATED',title:v.target?.name==='asteroid'?'Heading to the asteroid':'Heading home',description:q.kind==='drift'?'The solid ship advances along your quoted push. Each checkpoint uses the current position and velocity.':bending?'The ship is following the field.':'The field has expired. We are coasting toward the target.',metrics:[['Next checkpoint',`${fmt(q.cost.lifetime,3)} years`],['Time still to target',`${fmt(q.detail.remaining)} years`],['Fuel left',fmt(v.resources.fuel)],['Lifetime afterward',fmt(after.lifetime)]],actions:[['Advance now',()=>advance=true]],evidence:'Prediction, passive tracers and committed flight use the same force evaluator and fixed 1/512-year tick while a force is active. Field expiry preserves velocity. The remaining coast is integrated exactly.'});return;}
+ if(q.kind==='extract'){card({state:'FINITE EXTRACTION',title:'Collecting resources',description:'We have intercepted the asteroid and stopped inside its operation region.',metrics:[['Gross yield','32 fuel + 8 credits'],['Operation cost','3 fuel + 2 credits'],['Net after report','+29 fuel / +3 credits'],['Time','2 years']],actions:[['Advance now',()=>advance=true]],evidence:'Fuel net here includes extraction only; approach, braking and onward travel are separately charged in the full-route comparison. Credits include the already-paid three-credit report. Upfront costs are checked before any rewards are awarded.'});return;}
+ card({state:'QUOTED ACTION',title:names[q.kind],description:q.detail.summary,metrics:[['Fuel',fmt(q.cost.fuel,2)],['Credits',fmt(q.cost.credits)],['Years',fmt(q.cost.lifetime)],['Fuel afterward',fmt(after.fuel,2)]],actions:[['Advance now',()=>advance=true]],evidence:q.kind==='brake'?'Being near home is insufficient. This burn must leave the ship inside the arrival region and at acceptable relative speed.':'Every action is tied to the current revision; interruption invalidates it.'});
 }
-function stop() {
-  epoch++;
-  request?.abort();
-  request = null;
-  game.pause();
-  pending = null;
-  preview = null;
-  $("#pending-action").replaceChildren();
-  render();
+function renderRouteBudget(){
+ const q=quote,v=game.view(),show=!!q?.kind.startsWith('gravity-');$('#route-budget').hidden=!show;if(!show)return;
+ const total=q.detail.miningComparison?.totalFuelSpent??q.cost.fuel+q.detail.braking,years=q.detail.miningComparison?.totalYears??q.detail.years,b=routeBaseline;
+ $('#route-bars').innerHTML=[['Fuel',v.budget.fuel,v.spent.fuel+total,b.spent.fuel+b.fuel,'fuel',2],['Years',v.budget.lifetime,v.spent.lifetime+years,b.spent.lifetime+b.years,'years',1]].map(([label,cap,used,original,unit,n])=>{const left=cap-used,pct=cap?100*used/cap:100,mark=cap?100*original/cap:100;return `<div class="resource-row"><div><span>${label} · ${fmt(cap)} ${unit} cap</span><strong class="${left<0?'bad':''}">${fmt(left,n)} ${unit} cap left</strong></div><div class="resource-track ${left<0?'over-budget':''}" role="img" aria-label="Projected ${fmt(used,n)} of ${fmt(cap)} ${unit} used; ${fmt(left,n)} left. Original route ${fmt(original,n)}."><span style="width:${Math.max(0,Math.min(100,pct))}%"></span><i style="left:${Math.max(0,Math.min(100,mark))}%"></i></div></div>`;}).join('');
+ const saved=b.fuel-total,extra=years-b.years;$('#route-tradeoff').textContent=`Projected · ${fmt(Math.abs(saved),2)} fuel ${saved>=0?'saved':'more'} · ${fmt(Math.abs(extra),1)} ${extra>=0?'extra':'fewer'} years vs original`;
+ const setting=(.07-q.detail.requestedSpeed)/.05*1000;$('#field-strength').value=setting;$('#field-setting').textContent=`${(setting/10).toFixed(1)}%`;
+ $('#field-strength').setAttribute('aria-valuetext',`${fmt(setting/10,1)} percent toward less fuel. ${fmt(total,2)} fuel including braking, ${fmt(years)} years.`);
 }
-function error(e) {
-  stop();
-  say("astra", e.message, "PAUSED · NO ACTION COMMITTED");
+function renderControls(){syncControls({interaction:scene.mode,view:game.view(),delegated:helm,planning:planAssist,request,pending:fuelRevisionPending,accepted:acceptedFuelRevision,quote,editing:handleEditing,error:uiError});}
+function render(){renderRouteBudget();const v=game.view();for(const m of ['plan','drive']){$('#'+m+'-mode').classList.toggle('active',v.mode===m);$('#'+m+'-mode').setAttribute('aria-pressed',String(v.mode===m));}$('#help-plan').hidden=v.mode!=='plan';$('#help-plan').disabled=!!request||v.phase==='arrived';$('#help-plan').textContent=v.calibration?'Help me plan':`Help me plan · ${v.calibrationCredits} credits`;document.body.dataset.mode=v.mode;document.body.classList.toggle('arrived',v.phase==='arrived');for(const k of ['fuel','credits','lifetime']){$('#'+k).textContent=fmt(v.resources[k]);$('#budget-'+k).disabled=v.active||!!request;}$('#budget-spend').textContent=hasDelegated?`${fmt(v.spent.fuel)} fuel · ${fmt(v.spent.credits)} credits · ${fmt(v.spent.lifetime)} years used`:'Spending limits';$('#interrupt').disabled=!v.active&&!request;$('#undo').disabled=!v.canUndo;$('#map-legend').innerHTML=attemptPath?`<span style="color:#e5bc8f">Your proposed push</span>${comparison?.sameState?'<span style="color:#c2d4ff">Astra’s alternative</span>':''}${previousAlternativePath?'<span style="color:#89a5c9">Earlier field preview</span>':''}<span style="color:#a8b2c5">Original motion</span>`:'';renderControls();
+ if(lastSkyTime!==v.time){scene.setSky(game.sky());lastSkyTime=v.time;}$('#scene-title').textContent=v.phase==='arrived'?'Home.':replayChapter==='locate'?'Locate ourselves.':replayChapter==='bend'?'Discover a way home.':replayChapter==='revise'?'Shape the plan together.':replayChapter==='mining'?'Is a stop worth it?':v.target?(v.target.name==='asteroid'?'Heading to the asteroid':'Heading home'):(v.calibration?'Shape the way home.':'Locate ourselves.');$('#scene-description').textContent=v.phase==='arrived'?'Arrival and braking verified.':replayChapter==='locate'?(v.calibration?'Position checked · home direction supported':'Select a light · identify · then locate ourselves'):v.mode==='plan'?'':v.active?'Driving · Interrupt to pause':'You have the helm · release applies the quote';$('#scene-caption').textContent=v.phase==='arrived'?'No pending movement · receipt recorded':v.mode==='plan'?'Preview · release to keep preview':v.active?'Driving · actual journey':quote?`Release to apply · ${fmt(quote.cost.fuel,2)} fuel${quote.kind==='experiment'?' · 2 years flight':''}`:'Drive · release applies the quote';$('#investigate-stop').hidden=!v.calibration||!!v.target||v.phase==='arrived'||!!v.report||!lastProposal;$('#investigate-stop').disabled=!!request||v.active;const origin=v.calibration?.position,shipOffset=origin?game.shipVector(V.sub(v.position,origin)):v.localPosition;scene.set({view:v,preview,previewKind:quote?.kind,comparison,attemptPath,previousAlternativePath,stroke,selected,evidenceVisible:quote?.kind==='calibrate'||replayChapter==='locate'&&!!v.calibration,fieldQuote:quote?.kind.startsWith('gravity-')?quote:null,handleY:fieldEdit?.handleY??0,fieldOffset:fieldEdit?.offset??[0,0,0],tracers,flightPath,shipOffset,homeDirection:v.calibration?game.shipVector(V.scale(v.position,-1)):null,homeOrigin:origin?game.shipVector(V.scale(origin,-1)):null,homeDistance:v.homeDistance,asteroidOffset:v.report?game.shipVector(V.sub(v.report.position,origin)):null,fieldProgress:v.field?(v.time-v.field.start)/(v.field.until-v.field.start):null});
+ $('#measurements').innerHTML=v.identifiedLights.map(l=>`<p>Selected light: <b>HIP ${l.catalogueId}</b> · synthetic spectral tag. Identity alone is not a position fix.</p>`).join('')+`<p>${v.calibration?`Four ranges solved position and bearings solved attitude. Held-out residual: ${v.calibration.heldOutResidual.toExponential(2)} ly in the ideal model.`:'Only bearings are available. Range, position and home direction remain unresolved.'}</p>`+v.observations.map(o=>`<p><b>${o.label}</b> · ${o.catalogueId?'Catalogue '+o.catalogueId:'unidentified'} · bearing [${o.bearing.map(n=>fmt(n,3)).join(', ')}]${o.range?' · '+fmt(o.range,5)+' ly':''}</p>`).join('');$('#ledger-count').textContent=`${v.ledger.length} actions`;$('#ledger').innerHTML=v.ledger.map(l=>`<tr><td>${esc(names[l.kind])}</td><td>${fmt(l.cost.fuel,3)} / ${fmt(l.reward.fuel,3)}</td><td>${fmt(l.cost.credits)} / ${fmt(l.reward.credits)}</td><td>${fmt(l.cost.lifetime,3)}</td></tr>`).join('');
+ if(v.phase==='arrived')card({state:'RECEIPT',title:'Arrival verified',description:'Position and speed checked.',metrics:[['Journey',`${fmt(v.time)} years`],['Fuel remaining',fmt(v.resources.fuel,2)],['Credits remaining',fmt(v.resources.credits)],['Lifetime remaining',fmt(v.resources.lifetime)]],actions:[['Inspect receipt',openDetails],['Explore again',()=>reset()]],evidence:`Final distance ${v.homeDistance.toExponential(3)} ly. Relative speed ${V.norm(v.velocity).toExponential(3)} ly/year. Gross spent ${fmt(v.spent.fuel,3)} fuel, ${fmt(v.spent.credits)} credits. Every reward came from the finite deposit and every debit appears in the ledger.`});
 }
-function resourceText(q) {
-  return `${fmt(q.cost.fuel)} fuel · ${fmt(q.cost.credits)} credits · ${fmt(q.cost.lifetime)} years`;
+function brush(impulse,released){if(game.view().target||game.view().phase==='arrived')return;if(game.view().active||request)pause();try{syncBudget();stroke=impulse;const q=released?quote:game.rawQuote({impulse,flightYears:2});if(!q||q.kind!=='experiment')return;if(!released)setQuote(q);if(released){game.rememberAttempt(q.id);attemptPath=game.preview(q.id,{frame:'ship',years:2}).proposed.path;if(game.view().mode==='drive'){applyBrush();return;}say('Your push is kept as a free preview. Let’s find out whether it points us toward home.','PREVIEW · NO RESOURCES SPENT');render();}}catch(e){fail(e);}}
+function syncBudget(){game.setBudget(Object.fromEntries(['fuel','credits','lifetime'].map(k=>[k,Number($('#budget-'+k).value)])));}
+function establishBudget(){syncBudget();hasDelegated=true;game.resume();}
+function commitReviewed(q,{source='human',enterDrive=false,investigation=false,token=epoch}={}){
+ if(!q||token!==epoch)throw Error('Expired action');
+ const mode=game.view().mode;
+ if(source==='astra'&&!(mode==='drive'&&helm)&&!(mode==='plan'&&planAssist&&investigation&&q.kind==='calibrate'))throw Error('Astra has no execution authority');
+ if(source==='route'&&!(mode==='drive'&&routeAuthority))throw Error('Route is paused');
+ const result=game.commit(q.id,{manual:source==='human',enterDrive,investigation});
+ return result;
 }
-function render() {
-  const v = game.view();
-  for (const k of ["fuel", "credits", "lifetime"]) {
-    $("#" + k).textContent = fmt(v.resources[k]);
-    $("#budget-" + k).disabled = hasDelegated;
-  }
-  $("#elapsed").textContent = `${fmt(v.time)} YEARS ELAPSED`;
-  $("#interrupt").disabled = !v.active && !request;
-  $("#delegate").textContent =
-    v.phase === "arrived"
-      ? "Home, verified"
-      : hasDelegated
-        ? v.active
-          ? "Astra has the helm"
-          : "Continue within remaining budget"
-        : "Get us home. You drive. ↗";
-  $("#delegate").disabled = v.active || v.phase === "arrived";
-  $("#budget-spend").textContent = hasDelegated
-    ? `${fmt(v.spent.fuel)} F · ${fmt(v.spent.credits)} C · ${fmt(v.spent.lifetime)} Y spent`
-    : "Gross spending cap";
-  $("#driver-status").textContent = request
-    ? "Considering the observed evidence…"
-    : v.phase === "arrived"
-      ? "Position and speed verified."
-      : v.active
-        ? "Driving within your budget."
-        : "Paused · you have the helm.";
-  const title =
-    v.phase === "unknown"
-      ? "Which way is home?"
-      : v.phase === "arrived"
-        ? "We made it home."
-        : v.target?.name === "asteroid"
-          ? "A useful detour."
-          : v.target?.name === "home"
-            ? "The long crossing."
-            : v.phase === "at-stop"
-              ? "A rock worth stopping for."
-              : v.phase === "mined"
-                ? "Enough for the road ahead."
-                : "A position. A way forward.";
-  $("#scene-title").textContent = title;
-  $("#scene-description").textContent =
-    v.phase === "unknown"
-      ? "Look around. Select a light. Bearings alone cannot tell us which way is home."
-      : v.phase === "arrived"
-        ? `Arrival checked at ${fmt(v.homeDistance, 8)} ly · ${fmt(V.norm(v.velocity), 8)} ly/year.`
-        : `Home ${fmt(v.homeDistance, 2)} light-years away · ${fmt(V.norm(v.velocity), 3)} ly/year${v.target ? ` · ${fmt(v.target.remaining)} years to ${v.target.name}` : ""}`;
-  $("#map-legend").innerHTML = v.calibration
-    ? '<span><i class="star-dot"></i>Recovered space</span><span style="color:#f1c28b">Current motion</span><span style="color:#7aa2d8">Gravity suppressed</span><span style="color:#9cead9">With impulse</span>'
-    : '<span><i class="star-dot"></i>Observed landmark</span><span>Ship frame · bearing only</span>';
-  $("#landmark-strip").innerHTML = v.observations
-    .map(
-      (o) =>
-        `<button data-landmark="${o.label}" class="${selected === o.label ? "selected" : ""}">${o.label}${o.range ? ` · ${fmt(o.range, 2)} ly` : ""}</button>`,
-    )
-    .join("");
-  const o = v.observations.find((o) => o.label === selected);
-  let report = o
-    ? `<strong>${o.label} · ${o.catalogueId ? `Catalogue ${o.catalogueId}` : "Unidentified light"}</strong><p>Ship-frame bearing [${o.bearing.map((n) => fmt(n, 3)).join(", ")}]. ${o.range ? `Scan range ${fmt(o.range, 5)} ly. Tagged correspondence, independently verified.` : "Range unknown. Identity unresolved. A close-looking pair may be far apart in depth."}</p>`
-    : "";
-  if (v.calibration)
-    report += `<p>Position recovered from four ranges; attitude from bearings. ${v.calibration.landmarks - 4} held-out landmarks agree within ${v.calibration.heldOutResidual.toExponential(1)} ly in this ideal sensor model.</p>`;
-  if (v.report) {
-    const r = v.report;
-    report += `<p><b>Asteroid · polar patch A</b> · radius ${r.radiusKm} km · spin ${r.spinPeriodHours} h · stationary. ${v.deposit.fuel ? "Gross deposit: 32 fuel + 8 credits. Extraction: 3 fuel + 2 credits + 2 years. Report: 3 credits already paid." : "Deposit exhausted; no further reward."}</p>`;
-  }
-  if (v.phase === "arrived")
-    report = `<strong>Arrival receipt · ${fmt(v.time)} simulated years</strong><p>Position ${v.homeDistance.toExponential(2)} ly from home; speed ${V.norm(v.velocity).toExponential(2)} ly/year. Both arrival conditions passed.</p><p>Spent ${fmt(v.spent.fuel)} fuel and ${fmt(v.spent.credits)} credits within your original delegation. ${v.ledger.some((x) => x.kind === "extract") ? "Recovered 32 fuel and 8 credits from one exhausted deposit." : "No resources extracted."}</p>`;
-  $("#report").innerHTML = report;
-  $("#ledger-count").textContent = `${v.ledger.length} actions`;
-  $("#ledger").innerHTML = v.ledger
-    .map(
-      (l) =>
-        `<tr><td>${escape(labels[l.kind])}</td><td>−${fmt(l.cost.fuel)} / +${fmt(l.reward.fuel)}</td><td>−${fmt(l.cost.credits)} / +${fmt(l.reward.credits)}</td><td>${fmt(l.cost.lifetime)}</td><td>${fmt(l.balance.fuel)} · ${fmt(l.balance.credits)} · ${fmt(l.balance.lifetime)}</td></tr>`,
-    )
-    .join("");
-  renderRoutes();
-  draw();
+function beginGesture(){const old=quote,edit=fieldEdit;pause(true);syncBudget();handleEditing=true;if(old?.kind.startsWith('gravity-'))setQuote(game.fieldQuote({destination:old.kind==='gravity-stop'?'asteroid':'home',speed:old.detail.requestedSpeed,centerShip:old.detail.centerShip}));if(edit&&fieldEdit)Object.assign(fieldEdit,{offset:edit.offset,handleY:edit.handleY});render();}
+function applyBrush(){if(quote?.kind!=='experiment')return;try{const q=quote;cancelWork();commitReviewed(q,{enterDrive:game.view().mode==='plan'});hasDelegated=true;routeAuthority=true;driftRemaining=q.detail.flightYears;flightPath=preview?.proposed.path;quote=null;preview=null;say('Push applied. Flying the quoted two-year preview; Interrupt pauses at a checkpoint.','DRIVING');render();proceed(epoch);}catch(e){fail(e);}}
+function editField(speed,offset=null,dy=0){try{offset=offset??fieldEdit?.offset??[0,0,0];const destination=fieldEdit?.destination??'home';let q=game.fieldQuote({destination,speed});const manual=V.norm(offset)>1e-10;if(manual)q=game.fieldQuote({destination,speed,centerShip:V.add(q.detail.centerShip,offset)});setQuote(q);fieldEdit.manual=manual;fieldEdit.offset=[...offset];fieldEdit.handleY=dy;render();}catch(e){say(e.message,'FIELD PREVIEW');}}
+async function releaseField(source,apply=false){if(!quote?.kind.startsWith('gravity-'))return;handleEditing=false;if(game.view().mode==='plan'&&!apply){say('Preview updated.','PREVIEW');render();return;}
+ try{const q=quote;if(source==='human')cancelWork();commitReviewed(q,{source,enterDrive:apply&&game.view().mode==='plan'});hasDelegated=true;routeAuthority=true;automaticMining=q.kind==='gravity-stop';plannedOnward=automaticMining;flightPath=preview?.proposed.path;fieldGoal=null;document.body.classList.remove('handle-busy');quote=null;preview=null;comparison=null;say('Field applied. The ship now follows the computed force.','DRIVING');render();return proceed(epoch);}catch(e){fail(e);}}
+function candidates(){const list=[];if(game.view().report&&!game.view().target&&game.view().phase==='calibrated'&&game.view().preference!=='less-fuel'){try{const q=game.fieldQuote({destination:'asteroid',speed:.025});list.push({...q,assessment:game.assess(q.id)});}catch{}}if(lastProposal?.kind.startsWith('gravity-')&&game.view().phase==='calibrated'&&!game.view().target){try{const q=game.fieldQuote({destination:lastProposal.kind==='gravity-stop'?'asteroid':'home',speed:lastProposal.detail.requestedSpeed,centerShip:lastProposal.detail.centerShip});list.push({...q,currentPreview:true,assessment:game.assess(q.id)});}catch{}}for(const kind of game.options()){try{const q=game.quote(kind);list.push({...q,assessment:game.assess(q.id)});}catch{}}return list;}
+function makeRequest(message,qs){const v=game.view(),a=game.attempt();return {requestId:crypto.randomUUID(),revision:v.revision,message,history:history.slice(-16),observation:{phase:v.phase,delegated:helm&&v.mode==='drive',planning:planAssist&&v.mode==='plan',resources:v.resources,budgetRemaining:Object.fromEntries(Object.keys(v.budget).map(k=>[k,Math.max(0,v.budget[k]-v.spent[k])])),preference:v.preference,landmarks:v.observations,navigation:v.calibration?{distance:v.homeDistance,speed:V.norm(v.velocity),target:v.target?.name??'none',remaining:v.target?.remaining??0,calibrationResidual:v.calibration.residual}:null,asteroid:v.report?{relativePosition:V.sub(v.report.position,v.position),velocity:v.report.velocity,radiusKm:v.report.radiusKm,operationRadiusLy:v.report.operationRadiusLy,spinPeriodHours:v.report.spinPeriodHours,grossFuel:v.deposit.fuel,grossCredits:v.deposit.credits,extractionFuel:3,extractionCredits:2,extractionYears:2,reportCreditsPaid:3}:null,attempt:a?{impulse:a.impulse,fuel:a.cost.fuel,years:2,committed:a.committed}:null},choices:qs.map(q=>{const pr=game.preview(q.id,{frame:'ship',years:2}),cmp=(q.kind.startsWith('gravity-')||q.kind.startsWith('launch-'))?game.compareAttempt(q.id,{years:2}):null;return {id:q.id,currentPreview:!!q.currentPreview,kind:q.kind,cost:q.cost,summary:q.detail.summary.slice(0,400),years:q.detail.years??0,reserve:q.detail.reserve??0,affordable:q.assessment.affordable,reason:q.assessment.reason,evidence:{impulse:q.detail.impulse??[0,0,0],gravityBefore:q.detail.gravityBefore??0,gravityAfter:q.detail.gravityAfter??0,gravityDuration:q.detail.gravityDuration??0,braking:q.detail.braking??0,speed:q.detail.speed??0,endpointSeparation:pr?V.norm(V.sub(pr.current.p,pr.proposed.p)):0,grossFuel:q.reward.fuel,grossCredits:q.reward.credits},field:q.kind.startsWith('gravity-')?{centerShip:q.detail.centerShip,duration:q.detail.duration,strength:q.detail.strength,miss:q.detail.miss,fullTripFuel:q.detail.miningComparison?.totalFuelSpent??q.cost.fuel+q.detail.braking,fullTripYears:q.detail.miningComparison?.totalYears??q.detail.years,fullTripCredits:q.detail.miningComparison?2:0,onwardMode:q.kind==='gravity-stop'?'direct-slow':'none'}:null,comparison:cmp?.sameState?{years:cmp.years,attemptFuel:cmp.attemptFuel,alternativeFuel:cmp.alternativeFuel,attemptHomeProgress:cmp.attemptHomeProgress,alternativeHomeProgress:cmp.alternativeHomeProgress}:null};})};}
+async function decide(message='Continue the delegated plan from the supplied evidence.',observeOnly=false){const token=epoch;if(!helm&&!planAssist&&!observeOnly)return;const qs=candidates();if(!qs.length)return fail(Error('No supported affordable continuation; reset or revise the current plan.'));const body=makeRequest(message,qs),ctrl=new AbortController();request=ctrl;render();try{let res;for(let retry=0;retry<21;retry++){res=await fetch('/api/journey',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:ctrl.signal});if(res.status!==409)break;await new Promise(r=>setTimeout(r,5000));if(token!==epoch)return;}const data=await res.json();if(token!==epoch||game.revision!==body.revision)return;if(!res.ok)throw Error(data.message||'Live Astra unavailable');if(data.requestId!==body.requestId||data.revision!==body.revision||data.model!=='gpt-6-astra')throw Error('Stale model reply rejected');request=null;const p=data.proposal;say(p.summary);if(observeOnly){if(p.preference!=='keep')game.preference(p.preference);fuelRevisionPending=false;render();return;}if(p.preference==='skip-stop'&&p.preference!==game.view().preference){const before=lastProposal;game.preference('skip-stop');automaticMining=false;plannedOnward=false;if(before?.kind==='gravity-home')setQuote(game.fieldQuote({speed:before.detail.requestedSpeed,centerShip:before.detail.centerShip}));else if(game.view().calibration)setQuote(game.fieldQuote({destination:'home'}));say('Stop declined. The report cost remains spent.','PLAN');return decide('The stop is declined. Keep the current direct preview and the human’s stated constraints. Remain in the current mode.');}if(p.preference!=='keep'&&p.preference!==game.view().preference){const before=game.view().target?null:(lastProposal?.kind.startsWith('gravity-')?lastProposal:qs.find(q=>q.kind==='gravity-home'));if(before){const old=game.fieldQuote({destination:before.kind==='gravity-stop'?'asteroid':'home',speed:before.detail.requestedSpeed,centerShip:before.detail.centerShip});previousAlternativePath=game.preview(old.id,{frame:'ship',years:2}).proposed.path;}game.preference(p.preference);if(before){const after=p.preference==='skip-stop'?game.fieldQuote(before.kind==='gravity-home'?{speed:before.detail.requestedSpeed,centerShip:before.detail.centerShip}:{destination:'home'}):game.quote(before.kind);const change={kind:before.kind,before:{fuel:before.cost.fuel+before.detail.braking,years:before.detail.years,speed:before.detail.requestedSpeed??before.detail.speed,center:before.detail.centerShip},after:{fuel:after.cost.fuel+after.detail.braking,years:after.detail.years,speed:after.detail.requestedSpeed??after.detail.speed,center:after.detail.centerShip}};recordedComparisons.push(change);setQuote(after);say(`Changed the control: ${fmt(change.before.fuel,2)} → ${fmt(change.after.fuel,2)} fuel including this leg’s brake; ${fmt(change.before.years)} → ${fmt(change.after.years)} years. The field and route preview now use the revised setting.`,'COMPUTED CHANGE');}return decide('The human priority is now applied. Use the current preview and latest stated constraints; remain in the current Plan or delegated Drive mode.');}
+ if(p.actionId===null){fuelRevisionPending=false;pause(true);return;}const chosen=qs.find(q=>q.id===p.actionId);if(!chosen||!chosen.assessment.affordable)throw Error('Unsupported or unaffordable action rejected');fuelRevisionPending=false;setQuote(chosen);if(game.view().mode==='plan'&&chosen.kind!=='calibrate'){render();return;}if(chosen.kind.startsWith('gravity-'))return await astraField(chosen,token);return await schedule(chosen,token);
+ }catch(e){if(e.name!=='AbortError'&&token===epoch)fail(e);}finally{if(request===ctrl)request=null;render();}}
+async function waitPreview(seconds,token){advance=false;const start=performance.now();while(!advance&&performance.now()-start<seconds*1000){if(token!==epoch||!(game.view().active||planAssist))return false;$('#execution-notice').textContent=`${quote?.kind.startsWith('gravity-')?'Astra moves the handle':'Next action'} in ${Math.max(0,Math.ceil(seconds-(performance.now()-start)/1000))} s · Interrupt to revise`;await new Promise(r=>setTimeout(r,80));}$('#execution-notice').textContent='';return token===epoch&&(game.view().active||planAssist);}
+async function astraField(q,token){await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));if(token!==epoch||!game.view().active)return;if(!await waitPreview(20,token))return;fieldGoal=q;document.body.classList.add('handle-busy');const target=q.detail.requestedSpeed,begin=Math.min(.065,target+.018);const destination=q.kind==='gravity-stop'?'asteroid':'home',guided=game.fieldQuote({destination,speed:target});fieldEdit={destination,speed:begin,offset:V.sub(q.detail.centerShip,guided.detail.centerShip)};say('We can reshape the field here. I’m moving the same handle you can drag.','DELEGATED FIELD CONTROL');const duration=scene.reduced?0:3000,start=performance.now();do{if(token!==epoch||!game.view().active)return;const t=duration?Math.min(1,(performance.now()-start)/duration):1;editField(begin+(target-begin)*(t*t*(3-2*t)));if(t>=1)break;await new Promise(r=>setTimeout(r,90));}while(true);if(token===epoch){setQuote(q);return releaseField('astra');}}
+async function schedule(q,token=epoch){if(token!==epoch||!(game.view().active||planAssist))return;setQuote(q);const bending=q.kind==='coast'&&game.view().field&&game.view().time<game.view().field.until-1e-9;const seconds=q.kind==='coast'||q.kind==='drift'?(bending||q.kind==='drift'?(scene.reduced?.5:.75):1):q.kind==='calibrate'?4:q.kind==='brake'?2:2.5;if(!await waitPreview(seconds,token))return;try{commitReviewed(q,{source:helm||planAssist?'astra':'route',investigation:q.kind==='calibrate',token});if(q.kind==='drift')driftRemaining=Math.max(0,driftRemaining-q.cost.lifetime);quote=null;preview=null;comparison=null;if(q.kind==='calibrate'){say('Position verified. Home direction is now known.','MEASURED & SOLVED');card({state:'POSITION VERIFIED',title:'Position verified.',description:'Home direction is now known.',metrics:[['Investigation paid',`${fmt(game.view().ledger.filter(l=>['identify','calibrate'].includes(l.kind)).reduce((n,l)=>n+l.cost.credits,0))} credits`],['Fuel / time spent','0 / 0']],evidence:'Four observations solved position and orientation; four held-out landmarks verified them. The home bearing is now supported by that solution.'});}if(q.kind==='extract'){say('The finite patch is exhausted: 32 fuel and 8 credits recovered, after paying 3 fuel, 2 credits and 2 years.','VERIFIED EXTRACTION');if(plannedOnward){game.preference('less-fuel');plannedOnward=false;}}render();if(game.view().phase==='arrived'){say('We made it. Position and speed both passed the arrival check.','VERIFIED ARRIVAL');return;}return proceed(token);}catch(e){fail(e);}}
+async function proceed(token=epoch){if(token!==epoch)return;if(game.view().mode==='plan'){if(planAssist)return decide('Propose a route for review. Remain in Plan.');return;}if(!game.view().active||(!helm&&!routeAuthority))return;const v=game.view(),opts=game.options();if(driftRemaining>1e-9)return schedule(game.driftQuote(Math.min(.125,driftRemaining)),token);if(v.target)return schedule(game.quote(opts[0]),token);if(v.phase==='at-stop'&&automaticMining)return schedule(game.quote('extract'),token);if(v.phase==='mined'){const q=game.quote('launch-home',{speed:.025});return schedule(q,token);}if(helm)return decide();game.pause();render();}
+function takeHelm(message){message??=`Take the helm and follow my current field preview if it is affordable. ${game.attempt()?'Use the preserved push as a reference. ':''}Respect my latest priorities; go directly home unless I choose a resource stop.`;if(game.view().active||request)pause(true);try{uiError=false;game.setMode('drive');establishBudget();helm=true;render();decide(message);}catch(e){fail(e);}}
+function helpPlan(message='Help me plan a direct gravity route home. Investigate if needed, then propose without movement.') {const pending=fuelRevisionPending;pause(true);fuelRevisionPending=pending;try{syncBudget();planAssist=true;uiError=false;render();decide(message);}catch(e){fail(e);}}
+function send(message){if(game.view().phase==='arrived')return;const fuel=/less fuel/i.test(message);if(fuel&&fuelRevisionPending)return;say(message,'YOU','user');const delegated=helm;pause(true);fuelRevisionPending=fuel;uiError=false;
+ if(game.view().mode==='plan'){if(game.view().calibration)helpPlan(message);else decide(message,true);}else if(delegated)takeHelm(message);else decide(message,true);render();}
+$('#help-plan').onclick=()=>helpPlan();
+let sliderArmed=false,sliderDrag=null;
+const slider=$('#field-strength');
+slider.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();const value=Number(slider.value);beginGesture();sliderArmed=true;sliderDrag={id:e.pointerId,x:e.clientX,value};slider.setPointerCapture(e.pointerId);};
+slider.onpointermove=e=>{if(!sliderDrag||e.pointerId!==sliderDrag.id)return;sliderDrag.value=Math.max(0,Math.min(1000,sliderDrag.value+(e.clientX-sliderDrag.x)/slider.getBoundingClientRect().width*1000*(e.shiftKey?.1:1)));sliderDrag.x=e.clientX;editField(.07-sliderDrag.value/1000*.05);};
+slider.oninput=()=>{const value=Number(slider.value);if(!sliderArmed){beginGesture();sliderArmed=true;}editField(.07-value/1000*.05);};
+slider.onpointerup=e=>{if(!sliderDrag||sliderDrag.id!==e.pointerId)return;sliderDrag=null;sliderArmed=false;if(slider.hasPointerCapture(e.pointerId))slider.releasePointerCapture(e.pointerId);releaseField('human');};
+slider.onpointercancel=slider.onlostpointercapture=()=>{sliderDrag=null;sliderArmed=false;handleEditing=false;};
+slider.onkeydown=e=>{if(e.key==='Escape'){const id=sliderDrag?.id;sliderDrag=null;sliderArmed=false;handleEditing=false;if(id!==undefined&&slider.hasPointerCapture(id))slider.releasePointerCapture(id);}if(e.key==='Enter'&&sliderArmed){e.preventDefault();sliderArmed=false;releaseField('human');}};
+function changeJourneyMode(mode){const old=quote;pause(true);game.setMode(mode);try{syncBudget();if(old?.kind.startsWith('gravity-'))setQuote(game.fieldQuote({destination:old.kind==='gravity-stop'?'asteroid':'home',speed:old.detail.requestedSpeed,centerShip:old.detail.centerShip}));else if(old?.kind==='experiment')setQuote(game.rawQuote({impulse:old.detail.impulse,flightYears:2}));else{quote=null;preview=null;}}catch(e){quote=null;preview=null;say(e.message,'PAUSED');}if(!quote)card({state:mode==='plan'?'PLAN · PAUSED':'DRIVE · YOU HAVE THE HELM',title:game.view().target?'Journey paused.':'Try a push',description:game.view().target?'Current position and spending are preserved. Astra can resume this route when you give the helm.':'Drag to explore a proposal.'});render();}
+$('#plan-mode').onclick=()=>changeJourneyMode('plan');$('#drive-mode').onclick=()=>changeJourneyMode('drive');
+for(const k of ['fuel','credits','lifetime'])$('#budget-'+k).onchange=()=>{try{syncBudget();quote=null;preview=null;render();}catch(e){fail(e);}};
+$('#delegate').onclick=()=>takeHelm();$('#interrupt').onclick=()=>{pause(true);say('Paused. You have the helm.','HELM INTERRUPTED');};$('#chat-form').onsubmit=e=>{e.preventDefault();const m=$('#message').value.trim();if(m){$('#message').value='';send(m);}};function requestLessFuel(){send(game.view().mode==='plan'?'Use less fuel and keep the revised route in Plan.':'Use less fuel and keep driving.');}revisionButton.onclick=requestLessFuel;$('#skip-stop').onclick=()=>{if(replayChapter==='mining'&&!game.view().target){pause();automaticMining=false;plannedOnward=false;game.preference('less-fuel');setQuote(game.fieldQuote({speed:.025}));say('Stop declined. The purchased report remains spent; this direct field route is still affordable.','COMPUTED REPLAY');}else send('Skip the asteroid stop and take us home.');};
+window.addEventListener('keydown',e=>{if(e.key==='Escape'&&(game.view().active||request)){$('#interrupt').click();}});
+$('#select-mode').onclick=()=>setMode('select');$('#brush-mode').onclick=()=>setMode('brush');$('#look-mode').onclick=()=>setMode('look');function setMode(m){scene.setMode(m);$('#journey-map').setAttribute('aria-label',m==='select'?'Select a catalogue light. Ringed bright lights are suggested targets; hover any catalogue star to highlight it. Selection is free.':m==='look'?'Move view. Drag to rotate the camera; this does not select or push.':'Preview a push. Drag from the ship; release follows Plan or Drive.');for(const id of ['select','brush','look']){$('#'+id+'-mode').classList.toggle('active',id===m);$('#'+id+'-mode').setAttribute('aria-pressed',String(id===m));}}$('#recenter').onclick=()=>scene.recenter();
+function openDetails(){$('#detail-drawer').hidden=false;$('#details-toggle').setAttribute('aria-expanded','true');}$('#details-toggle').onclick=openDetails;$('#close-details').onclick=()=>{$('#detail-drawer').hidden=true;$('#details-toggle').setAttribute('aria-expanded','false');};
+$('#undo').onclick=()=>{pause();try{game.undo();acceptedFuelRevision=false;recordedComparisons=[];previousAlternativePath=null;flightPath=null;tracers=null;comparison=null;history=[];say('Rewound the field edit and every later checkpoint. Time, resources, deposit and ledger are restored together.','UNDO · COMPLETE STATE RESTORED');render();setQuote(game.fieldQuote({destination:automaticMining&&game.view().report?'asteroid':'home'}));}catch(e){fail(e);}};
+function reset(random=false,demo=isDemo){pause();routeBaseline=null;isDemo=demo;if(random)seed=Math.floor(Math.random()*2**32);else if(demo)seed=DEMO.seed;game=new Journey(features,demo?{...DEMO,seed}:{seed,mode:'plan'});hasDelegated=false;fuelRevisionPending=false;acceptedFuelRevision=false;uiError=false;history=[];quote=null;preview=null;comparison=null;attemptPath=null;stroke=null;tracers=null;flightPath=null;fieldEdit=null;selected=null;automaticMining=false;plannedOnward=false;lastProposal=null;lastSkyTime=-1;recordedComparisons=[];previousAlternativePath=null;$('#conversation').replaceChildren();for(const [k,n] of Object.entries(demo?{...DEMO.balance}:{fuel:75,credits:20,lifetime:900}))$('#budget-'+k).value=n;$('#preset-label').textContent=demo?'Demo preset · 22 fuel / 15 credits / 500 years':'Random run · original 100 fuel / 30 credits / 1,000 years';say("Let’s find where we are. You can also try a push before we move.",'ASTRA · READY');scene.recenter();card({state:'YOUR FIRST MOVE',title:'Which light is that?',description:'Select a ringed light to investigate.',actions:[['Select a bright light',selectBrightLight]],evidence:'Preview a push: drag outward from the ship. Move view rotates the camera. Release keeps a free preview; applying it spends the quote.'});syncBudget();render();if(replayChapter)setupReplay();}
+$('#reset').onclick=()=>reset();$('#random-sky').onclick=()=>reset(true,false);$('#demo-sky').onclick=()=>reset(false,true);$('#export-ledger').onclick=()=>{const blob=new Blob([JSON.stringify({model:'brush-gravity-comparison-v1',...game.view(),attempt:game.attempt(),humanRevisions:recordedComparisons},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='brush-journey-record.json';a.click();URL.revokeObjectURL(url);};for(const [k,n] of Object.entries(DEMO.balance))$('#budget-'+k).value=n;syncBudget();render();
+
+const chapters=[
+ {id:'locate',title:'Locate ourselves',question:'What evidence tells us where home is?',action:'Run the priced scan, then inspect the measured landmarks and held-out check.'},
+ {id:'bend',title:'Discover capabilities',question:'Can a force field make a route affordable?',action:'Drag the field handle. Compare the path, budget bars and any rejection before applying.'},
+ {id:'revise',title:'Shape the plan together',question:'How much fuel can we save, and how many extra years does it take?',action:'Ask Astra to use less fuel, or fine-tune the same handle. Compare with the fixed original route.'},
+ {id:'travel',title:'Arrive home',question:'Does the computed route actually arrive with braking accounted for?',action:'Start the quoted flight. Watch actual checkpoints, interrupt, resume, and inspect the receipt.'},
+ {id:'mining',title:'Evaluate mining',question:'Does the full resource stop pay for its approach, extraction and onward journey?',action:'Inspect the finite deposit and full trip quote. Apply the route to extract and continue home.'}
+];
+let chapterSnapshot=null;
+function inspectChapter(id){const c=chapters.find(c=>c.id===id)||chapters[0],v=chapterSnapshot;
+ $('#chapter-title').textContent=c.title;$('#chapter-question').textContent=c.question;
+ for(const b of $('#chapter-tabs').children)b.setAttribute('aria-pressed',String(b.dataset.chapter===c.id));
+ let evidence=c.id==='locate'?(v.calibration?`Position solved from four ranges; four held-out landmarks agree to ${v.calibration.heldOutResidual.toExponential(2)} ly. ${v.observations.filter(o=>o.range).length} tagged ranges are available.`:'Position and home direction are unresolved. No range or catalogue identity has been inferred.'):
+ c.id==='mining'?(v.report?`Report acquired. Finite deposit: ${v.deposit.fuel} fuel and ${v.deposit.credits} credits. Extraction costs 3 fuel, 2 credits and 2 years; approach, braking and onward flight are separately included in the route quote.`:'No asteroid report purchased in this journey. Mining replay starts with 35 fuel, 15 credits and 550 years so the full route can be demonstrated without changing this journey.'):
+ c.id==='travel'?`Actual journey: ${fmt(v.time,3)} years elapsed. ${v.ledger.length} ledger actions; gross spending ${fmt(v.spent.fuel,3)} fuel and ${fmt(v.spent.credits)} credits. ${v.phase==='arrived'?'Arrival and braking verified.':'Arrival has not been verified.'}`:
+ v.calibration?'Quotes and paths are computed from the measured position and current motion. Field charges are distinct from the reserved brake; budget bars show projected gross allowance remaining.':'Locate home first to obtain a supported route comparison.';
+ $('#chapter-evidence').replaceChildren();for(const text of [evidence,c.action]){const p=document.createElement('p');p.textContent=text;$('#chapter-evidence').append(p);}
+ $('#chapter-replay').href=`?replay=${c.id}`;$('#chapter-replay').textContent=c.id==='mining'?'Open funded mining replay · 35 / 15 / 550 ↗':'Open isolated computed replay ↗';
 }
-function renderRoutes() {
-  const v = game.view(),
-    el = $("#route-options");
-  el.replaceChildren();
-  if (!v.calibration || v.target || v.phase === "arrived") return;
-  for (const kind of [
-    "launch-home",
-    ...(v.report && v.deposit.fuel ? ["launch-stop"] : []),
-  ]) {
-    if (!game.options().includes(kind)) continue;
-    try {
-      const q = game.quote(kind),
-        button = document.createElement("button");
-      button.className = "route-card";
-      const total = q.cost.fuel + q.detail.braking;
-      button.innerHTML = `<strong>${kind === "launch-home" ? "Direct home" : "Asteroid detour"}</strong><small>${fmt(q.detail.years)} years · ${fmt(q.detail.speed, 3)} ly/year</small><small>${fmt(total)} fuel incl. this leg’s braking</small><small>${kind === "launch-stop" ? `Full trip: ${fmt(q.detail.miningComparison.totalYears)} years · ${fmt(q.detail.miningComparison.totalFuelSpent)} fuel spent, 32 recovered; net ${q.detail.miningComparison.netFuel >= 0 ? "+" : "−"}${fmt(Math.abs(q.detail.miningComparison.netFuel))} fuel. Stop credits: 5 spent / 8 recovered; calibration 6 already paid.` : `${fmt(q.detail.reserve)} fuel reserved for arrival.`}</small>`;
-      button.onclick = () => {
-        if (game.view().active) stop();
-        preview = game.preview(game.quote(kind).id);
-        draw();
-        say(
-          "astra",
-          `${labels[kind]} preview: ${resourceText(q)} to launch, then ${fmt(q.detail.braking)} fuel to brake. ${kind === "launch-stop" ? "Mining adds 32 gross fuel and 8 credits; extraction costs 3 fuel, 2 credits, 2 years. Onward home launch and braking remain additional." : ""}`,
-          "COMPUTED ROUTE · PREVIEW ONLY",
-        );
-      };
-      el.append(button);
-    } catch (e) {
-      const p = document.createElement("p");
-      p.textContent = e.message;
-      el.append(p);
-    }
-  }
+$('#chapters-toggle').onclick=()=>{chapterSnapshot=game.view();$('#chapter-checkpoint').textContent=`Read-only snapshot · ${fmt(chapterSnapshot.time,3)} years elapsed · ${chapterSnapshot.mode==='plan'?'Plan':'Drive'}`;$('#chapter-tabs').replaceChildren();for(const c of [...chapters].sort((a,b)=>['locate','bend','revise','mining','travel'].indexOf(a.id)-['locate','bend','revise','mining','travel'].indexOf(b.id))){const b=document.createElement('button');b.textContent=c.title;b.dataset.chapter=c.id;b.onclick=()=>inspectChapter(c.id);$('#chapter-tabs').append(b);}inspectChapter('locate');$('#chapters-dialog').showModal();};
+$('#chapters-close').onclick=()=>$('#chapters-dialog').close();
+function replayNotice(){const c=chapters.find(c=>c.id===replayChapter);if(!c)return;$('#replay-label').hidden=false;$('#replay-label').textContent=`Computed replay · ${c.title}${c.id==='mining'?' · 35 fuel / 15 credits / 550 years':''}`;$('#reset').title='Reset only this isolated replay';$('#reset').querySelector('span:last-child').textContent='Reset replay';$('#return-replay').hidden=!window.opener;$('#random-sky').hidden=true;$('#demo-sky').hidden=true;}
+function setupReplay(){const c=chapters.find(c=>c.id===replayChapter);if(!c)return;replayNotice();
+ try{
+ if(c.id==='locate'){card({state:'COMPUTED REPLAY · LOCATE',title:'Which light is that?',description:'Select a light in the actual sky. Identify it, inspect its constellation reference, then solve our position.',actions:[['Select a bright light',()=>{const token=scene.visibleLight();if(token)selectLight(token);}]],metrics:[['Selected-light tag','1 credit'],['Full location investigation','6 credits total']],evidence:'A spectral tag identifies one star. Constellation context alone cannot solve position or point home.'});return;}
+
+ commitReviewed(game.quote('calibrate'),{source:'human',investigation:true});
+ if(c.id==='mining'){game.setMode('drive');game.resume();commitReviewed(game.quote('survey'),{source:'human'});game.setMode('plan');setQuote(game.fieldQuote({destination:'asteroid',speed:.025}));say('Funded mining replay: calibration and the asteroid report are paid. Review the full approach, extraction and reserved onward route.','COMPUTED REPLAY');return;}
+ const q=game.fieldQuote({speed:c.id==='travel'?.025:.04});setQuote(q);
+ if(c.id==='travel'){flightPath=preview?.proposed.path;commitReviewed(q,{source:'human',enterDrive:true});routeAuthority=false;game.pause();quote=null;preview=null;card({state:'COMPUTED REPLAY · FLIGHT READY',title:'Follow the field home.',description:'The field charge is paid. Start actual flight checkpoints, then brake and verify.',actions:[['Start travel',()=>{game.resume();routeAuthority=true;proceed(epoch);}]],evidence:'This isolated setup used priced calibration and a validated field commitment. It did not call Astra.'});}
+ if(c.id==='bend'){const direct=game.quote('launch-home',{speed:.04});say(`A direct push and brake need ${fmt(direct.cost.fuel+direct.detail.braking)} fuel; our cap is ${fmt(game.view().budget.fuel)}. A temporary field can bend this motion home. Try its handle and inspect the consequences.`,'COMPUTED REPLAY');}else say(c.id==='revise'?'Computed starting route. Ask live Astra to use less fuel, then review the actual quote and path.':c.action,'COMPUTED REPLAY');render();
+ }catch(e){fail(e);}
 }
-function publicRequest(message, quotes) {
-  const v = game.view();
-  return {
-    requestId: crypto.randomUUID(),
-    revision: v.revision,
-    message,
-    history: history.slice(-16),
-    observation: {
-      phase: v.phase,
-      delegated: v.active,
-      resources: v.resources,
-      budgetRemaining: Object.fromEntries(
-        Object.keys(v.budget).map((k) => [
-          k,
-          Math.max(0, v.budget[k] - v.spent[k]),
-        ]),
-      ),
-      preference: v.preference,
-      landmarks: v.observations,
-      asteroid: v.report
-        ? {
-            relativePosition: V.sub(v.report.position, v.position),
-            velocity: v.report.velocity,
-            radiusKm: v.report.radiusKm,
-            operationRadiusLy: v.report.operationRadiusLy,
-            spinPeriodHours: v.report.spinPeriodHours,
-            grossFuel: v.deposit.fuel,
-            grossCredits: v.deposit.credits,
-            extractionFuel: 3,
-            extractionCredits: 2,
-            extractionYears: 2,
-            reportCreditsPaid: 3,
-          }
-        : null,
-      navigation: v.calibration
-        ? {
-            distance: v.homeDistance,
-            speed: V.norm(v.velocity),
-            target: v.target?.name ?? "none",
-            remaining: v.target?.remaining ?? 0,
-            calibrationResidual: v.calibration.residual,
-          }
-        : null,
-    },
-    choices: quotes.map((q) => ({
-      id: q.id,
-      kind: q.kind,
-      cost: q.cost,
-      summary: q.detail.summary.slice(0, 400),
-      years: q.detail.years ?? 0,
-      reserve: q.detail.reserve ?? 0,
-      evidence: q.kind.startsWith("launch-")
-        ? {
-            impulse: q.detail.impulse,
-            gravityBefore: q.detail.gravityBefore,
-            gravityAfter: q.detail.gravityAfter,
-            gravityDuration: q.detail.gravityDuration,
-            braking: q.detail.braking,
-            speed: q.detail.speed,
-            endpointSeparation: V.norm(
-              V.sub(
-                game.preview(q.id).current.p,
-                game.preview(q.id).proposed.p,
-              ),
-            ),
-            grossFuel: 0,
-            grossCredits: 0,
-          }
-        : q.kind === "survey"
-          ? {
-              impulse: [0, 0, 0],
-              gravityBefore: 0,
-              gravityAfter: 0,
-              gravityDuration: 0,
-              braking: 0,
-              speed: 0,
-              endpointSeparation: 0,
-              grossFuel: 0,
-              grossCredits: 0,
-            }
-          : {
-              impulse: [0, 0, 0],
-              gravityBefore: 0,
-              gravityAfter: 0,
-              gravityDuration: 0,
-              braking: 0,
-              speed: 0,
-              endpointSeparation: 0,
-              grossFuel: q.reward.fuel,
-              grossCredits: q.reward.credits,
-            },
-    })),
-  };
+
+if(replayChapter)setupReplay();
+
+$('#return-replay').onclick=()=>{if(window.opener){window.opener.focus();window.close();}};
+
+function selectLight(token){if(game.view().active||request)pause(true);selected=token;render();const known=game.view().identifiedLights.find(x=>x.observationId===token);if(known)return showIdentification(known);
+ card({state:'SELECTED LIGHT · IDENTITY UNKNOWN',title:'Identify this light',description:'A spectral tag identifies this star. We’ll still need measurements to locate the ship.',metrics:[['Identify','1 credit'],['Fuel / years','0 / 0']],actions:[['Identify light · 1 credit',()=>{try{cancelWork();const q=game.identifyQuote(token);commitReviewed(q,{source:'human',investigation:true});quote=null;preview=null;render();showIdentification(game.view().identifiedLights.find(x=>x.observationId===token));}catch(e){fail(e);}}]],evidence:'Selection is bound to an opaque observation token for the clicked catalogue point, not the public array order. The first tag credit counts toward the six-credit location investigation.'});
 }
-async function decide(
-  message = "Continue the delegated plan using the latest evidence.",
-  observeOnly = false,
-) {
-  const token = epoch;
-  if (!game.view().active && !observeOnly) return;
-  let quotes;
-  try {
-    quotes = game.options().map((k) => game.quote(k));
-  } catch (e) {
-    return error(e);
-  }
-  if (!quotes.length) return;
-  const body = publicRequest(message, quotes),
-    controller = new AbortController();
-  request = controller;
-  render();
-  try {
-    let res;
-    for (let attempt = 0; attempt < 21; attempt++) {
-      res = await fetch("/api/journey", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      if (res.status !== 409) break;
-      await new Promise((r) => setTimeout(r, 5000));
-      if (token !== epoch) return;
-    }
-    const data = await res.json();
-    if (token !== epoch || body.revision !== game.revision) return;
-    if (!res.ok) throw Error(data.message || "Live Astra unavailable.");
-    if (
-      data.requestId !== body.requestId ||
-      data.revision !== body.revision ||
-      data.model !== "gpt-6-astra"
-    )
-      throw Error("Stale or unsupported model reply rejected.");
-    request = null;
-    const p = data.proposal;
-    say("astra", p.summary, "LIVE ASTRA");
-    if (observeOnly) {
-      if (p.preference !== "keep") game.preference(p.preference);
-      render();
-      return;
-    }
-    if (p.preference !== "keep" && p.preference !== game.view().preference) {
-      const old = quotes.find((q) => q.kind === "launch-home");
-      previousRoute = old
-        ? {
-            fuel: old.cost.fuel + old.detail.braking,
-            years: old.detail.years,
-            speed: old.detail.speed,
-          }
-        : null;
-      game.preference(p.preference);
-      if (game.view().target)
-        say(
-          "astra",
-          "This leg is already underway. The new speed preference applies to the next launch; slowing now would require an extra burn. Coast and arrival braking retain their current quotes.",
-          "PLAN SCOPE",
-        );
-      if (previousRoute) {
-        const next = game.quote("launch-home");
-        say(
-          "astra",
-          `Plan revised: ${fmt(previousRoute.speed, 3)} → ${fmt(next.detail.speed, 3)} ly/year. Home launch + braking: ${fmt(previousRoute.fuel)} → ${fmt(next.cost.fuel + next.detail.braking)} fuel. Travel: ${fmt(previousRoute.years)} → ${fmt(next.detail.years)} years.`,
-          "COMPUTED CHANGE",
-        );
-      }
-      render();
-      return decide(
-        "The preference is updated. Continue driving with revised affordable quotes.",
-      );
-    }
-    if (p.actionId === null) {
-      stop();
-      return;
-    }
-    const q = quotes.find((q) => q.id === p.actionId);
-    if (!q) throw Error("Unsupported action rejected.");
-    await schedule(q, token);
-  } catch (e) {
-    if (e.name !== "AbortError" && token === epoch) error(e);
-  } finally {
-    if (request === controller) request = null;
-    render();
-  }
+function showIdentification(light){const star=features.find(f=>f.id===light.catalogueId);if(!star)return;const [ra,dec]=star.geometry.coordinates,con=Constellation(ra/15,dec),remaining=game.view().calibrationCredits;
+ card({state:'IDENTIFIED · CONSTELLATION CONTEXT',title:`HIP ${light.catalogueId} · ${con.name}`,description:game.view().calibration?'This tagged light is part of the measured sky.':'Star identified. Next, measure our position and home direction.',metrics:[['Tag paid','1 credit'],['Location investigation',game.view().calibration?'Complete':`${remaining} credits left`]],actions:game.view().calibration?[['Inspect measurements',openDetails]]:[[`Locate ourselves · ${remaining} credits`,()=>{if(replayChapter==='locate'){try{commitReviewed(game.quote('calibrate'),{source:'human',investigation:true});render();say('Position and orientation solved from measured ranges and bearings; four held-out stars check the fix.','COMPUTED REPLAY');card({state:'POSITION VERIFIED',title:'Now home has a direction.',description:`Held-out residual ${game.view().calibration.heldOutResidual.toExponential(2)} ly.`,actions:[['Inspect measurements',openDetails]],evidence:'The same initial position and velocity are preserved. The first identification credit counted toward calibration. Each additional identification remains separately charged; no fuel or journey time was spent.'});}catch(e){fail(e);}}else helpPlan();}]],evidence:'HIP identity is supplied by the synthetic tag instrument. Constellation membership uses bundled Astronomy Engine IAU boundary lookup on the real catalogue J2000 coordinates. Reference pattern is not registered onto the unknown ship view.'});
+ renderConstellationPreview($('#star-context'),{pattern:constellationLines.find(c=>c.id===con.symbol),coordinates:[ra,dec],id:light.catalogueId,name:con.name});
 }
-async function schedule(q, token = epoch) {
-  if (token !== epoch || !game.view().active) return;
-  pending = q;
-  preview = game.preview(q.id);
-  if (q.kind.startsWith("launch-")) autoMining = q.kind === "launch-stop";
-  let seconds = q.kind.startsWith("launch-")
-    ? 10
-    : q.kind === "calibrate"
-      ? 4
-      : q.kind === "coast"
-        ? 1.5
-        : 3;
-  $("#pending-action").innerHTML =
-    `<strong>${escape(labels[q.kind])}</strong>${resourceText(q)}${q.detail.reserve ? `<br>Keep ${fmt(q.detail.reserve)} fuel reserved.` : ""}<small>${q.kind.startsWith("launch-") ? `Gravity ${q.detail.gravityBefore} → 0 for up to ${fmt(q.detail.gravityDuration)} years · impulse ${fmt(V.norm(q.detail.impulse), 4)} ly/year. Interrupt to revise.` : q.kind === "coast" ? `${fmt(q.cost.lifetime)} simulated years compressed into this checkpoint.` : q.kind === "calibrate" ? "Bearings leave position and depth unresolved. Four tagged ranges distinguish candidate positions; four additional stars test the fix. Total investigation: 6 credits." : "Supported action, checked against your remaining budget."}</small><button id="advance" class="quiet" style="margin-top:10px">Advance now</button><small id="countdown"></small>`;
-  render();
-  let advance = false;
-  $("#advance").onclick = () => (advance = true);
-  const start = performance.now();
-  while (!advance && performance.now() - start < seconds * 1000) {
-    if (token !== epoch || !game.view().active) return;
-    $("#countdown").textContent =
-      `Executing in ${Math.max(0, Math.ceil(seconds - (performance.now() - start) / 1000))} s · Interrupt to pause`;
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  if (token !== epoch || q.revision !== game.revision || !game.view().active)
-    return;
-  try {
-    game.commit(q.id);
-    pending = null;
-    preview = null;
-    $("#pending-action").replaceChildren();
-    render();
-    if (q.kind === "calibrate")
-      say(
-        "astra",
-        "Range evidence resolves depth; four independent landmarks validate the position and attitude. Home navigation is now unlocked.",
-        "SENSOR & SOLVER RESULT",
-      );
-    if (q.kind === "extract")
-      say(
-        "astra",
-        "Extraction complete: +32 fuel and +8 credits gross; −3 fuel, −2 credits, −2 years. Patch A is exhausted.",
-        "VERIFIED OPERATION",
-      );
-    if (game.view().phase === "arrived") {
-      say(
-        "astra",
-        "We are inside the home arrival region and at rest. The ledger reconciles every debit and yield.",
-        "VERIFIED ARRIVAL",
-      );
-      return;
-    }
-    const options = game.options();
-    if (options.length === 1) return schedule(game.quote(options[0]), token);
-    if (game.view().phase === "at-stop" && autoMining)
-      return schedule(game.quote("extract"), token);
-    return decide();
-  } catch (e) {
-    error(e);
-  }
-}
-function takeHelm(message, explicit = false) {
-  if (game.view().active || request) stop();
-  if (!hasDelegated && !explicit) return decide(message, true);
-  try {
-    if (!hasDelegated) {
-      game.delegate(
-        Object.fromEntries(
-          ["fuel", "credits", "lifetime"].map((k) => [
-            k,
-            Number($("#budget-" + k).value),
-          ]),
-        ),
-      );
-      hasDelegated = true;
-    } else game.resume();
-    render();
-    decide(message);
-  } catch (e) {
-    error(e);
-  }
-}
-$("#delegate").onclick = () =>
-  takeHelm(
-    "Get us home. You drive within the displayed budget, including a useful finite resource stop if affordable.",
-    true,
-  );
-$("#interrupt").onclick = () => {
-  stop();
-  say(
-    "astra",
-    "Paused. The pending action is invalidated; your remaining gross-spend budget is preserved.",
-    "HELM INTERRUPTED",
-  );
-};
-$("#chat-form").onsubmit = (e) => {
-  e.preventDefault();
-  const m = $("#message").value.trim();
-  if (!m) return;
-  $("#message").value = "";
-  say("user", m);
-  takeHelm(m);
-};
-document.querySelectorAll("[data-message]").forEach(
-  (b) =>
-    (b.onclick = () => {
-      const m = b.dataset.message;
-      say("user", m);
-      takeHelm(m);
-    }),
-);
-$("#landmark-strip").onclick = (e) => {
-  if (e.target.dataset.landmark) {
-    selected = e.target.dataset.landmark;
-    render();
-  }
-};
-function reset(s) {
-  stop();
-  seed = s;
-  game = new Journey(features, { seed });
-  hasDelegated = false;
-  history = [];
-  autoMining = false;
-  previousRoute = null;
-  selected = "L1";
-  $("#conversation").replaceChildren();
-  say(
-    "astra",
-    "Unidentified bearings only. Select a light, try a raw experiment, or delegate a six-credit calibration.",
-    "MISSION BRIEF",
-  );
-  render();
-}
-$("#new-journey").onclick = () => reset(Math.floor(Math.random() * 2 ** 32));
-const replay = document.createElement("button");
-replay.className = "quiet";
-replay.textContent = "Reset same sky";
-replay.onclick = () => reset(seed);
-$("#new-journey").after(replay);
-$("#export-ledger").onclick = () => {
-  const b = new Blob(
-      [
-        JSON.stringify(
-          { model: "synthetic-journey-v1", ...game.view() },
-          null,
-          2,
-        ),
-      ],
-      { type: "application/json" },
-    ),
-    url = URL.createObjectURL(b),
-    a = document.createElement("a");
-  a.href = url;
-  a.download = "journey-record.json";
-  a.click();
-  URL.revokeObjectURL(url);
-};
-const raw = document.createElement("details");
-raw.className = "raw-experiment";
-raw.innerHTML =
-  '<summary>Raw physics experiment</summary><p>Ship-axis impulse. Changes motion; offers no homeward claim.</p><label>Impulse (ly/year) <input id="raw-impulse" type="range" min="-0.02" max="0.02" value="0.005" step="0.001"></label><label>Gravity multiplier <select id="raw-gravity"><option value="1">1 · current attraction</option><option value="0">0 · suppress attraction</option></select></label><button id="raw-preview" class="quiet">Preview from current state</button><button id="raw-commit" class="quiet" disabled>Apply quoted experiment</button><p id="raw-quote"></p>';
-$(".workspace").append(raw);
-let rawQuote = null;
-$("#raw-preview").onclick = () => {
-  stop();
-  try {
-    rawQuote = game.rawQuote({
-      impulse: Number($("#raw-impulse").value),
-      gravity: Number($("#raw-gravity").value),
-    });
-    preview = game.preview(rawQuote.id);
-    $("#raw-quote").textContent =
-      `Quote: ${resourceText(rawQuote)}. ${$("#raw-impulse").value} ly/year impulse. Same-state computed preview; no position fix is gained.`;
-    $("#raw-commit").disabled = false;
-    draw();
-  } catch (e) {
-    error(e);
-  }
-};
-$("#raw-commit").onclick = () => {
-  try {
-    if (!rawQuote) throw Error("Preview first");
-    if (
-      rawQuote.revision !== game.revision ||
-      Number($("#raw-impulse").value) !== rawQuote.detail.impulse[0] ||
-      Number($("#raw-gravity").value) !== rawQuote.detail.gravityAfter
-    )
-      throw Error("Experiment changed; preview again");
-    const options = {
-      impulse: Number($("#raw-impulse").value),
-      gravity: Number($("#raw-gravity").value),
-    };
-    if (!hasDelegated) {
-      game.delegate(
-        Object.fromEntries(
-          ["fuel", "credits", "lifetime"].map((k) => [
-            k,
-            Number($("#budget-" + k).value),
-          ]),
-        ),
-      );
-      hasDelegated = true;
-    } else game.resume();
-    const q = game.rawQuote(options);
-    if (q.cost.fuel !== rawQuote.cost.fuel)
-      throw Error("Experiment changed; preview again");
-    game.commit(q.id);
-    game.pause();
-    rawQuote = null;
-    preview = null;
-    $("#raw-commit").disabled = true;
-    render();
-  } catch (e) {
-    error(e);
-  }
-};
-const canvas = $("#journey-map"),
-  ctx = canvas.getContext("2d");
-let projected = [];
-function draw() {
-  const rect = canvas.getBoundingClientRect(),
-    dpr = Math.min(devicePixelRatio, 2),
-    w = rect.width,
-    h = rect.height;
-  canvas.width = w * dpr;
-  canvas.height = h * dpr;
-  ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, w, h);
-  const v = game.view();
-  const center = preview?.initial.p ?? (v.calibration ? v.position : [0, 0, 0]);
-  const transform = (p) => {
-    const a = V.sub(p, center),
-      c = Math.cos(yaw),
-      s = Math.sin(yaw),
-      x = a[0] * c - a[2] * s,
-      z = a[0] * s + a[2] * c,
-      y = a[1] * Math.cos(pitch) - z * Math.sin(pitch);
-    return [x, y, z];
-  };
-  let scale =
-    zoom *
-    (v.calibration
-      ? preview
-        ? Math.min(w, h) / 1.1
-        : Math.min(w, h) / (Math.max(v.homeDistance, 0.5) * 2.8)
-      : Math.min(w, h) * 0.32);
-  const project = (p) => {
-    const a = transform(p);
-    return [w * 0.49 + a[0] * scale, h * 0.58 - a[1] * scale, a[2]];
-  };
-  ctx.strokeStyle = "#263b5148";
-  ctx.lineWidth = 1;
-  for (let r = 1; r < 5; r++) {
-    ctx.beginPath();
-    ctx.ellipse(
-      w * 0.49,
-      h * 0.58,
-      r * Math.min(w, h) * 0.12,
-      r * Math.min(w, h) * 0.07,
-      0,
-      0,
-      Math.PI * 2,
-    );
-    ctx.stroke();
-  }
-  ctx.setLineDash([3, 6]);
-  ctx.beginPath();
-  ctx.moveTo(0, h * 0.58);
-  ctx.lineTo(w, h * 0.58);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  const line = (points, color, width = 1.5, dash = []) => {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    ctx.setLineDash(dash);
-    ctx.beginPath();
-    points.forEach((p, i) => {
-      const [x, y] = project(p);
-      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
-    });
-    ctx.stroke();
-    ctx.setLineDash([]);
-  };
-  const dot = (p, color, label, r = 4) => {
-    const [x, y, z] = project(p);
-    ctx.fillStyle = color;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 12;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = "#dbe6f3";
-    ctx.font = '12px "DM Sans", sans-serif';
-    ctx.fillText(label, x + 10, y - 10);
-    return { x, y, label };
-  };
-  projected = [];
-  if (!v.calibration && !preview) {
-    line(
-      v.observations.slice(0, 5).map((o) => o.bearing),
-      "#52688055",
-      1,
-      [4, 7],
-    );
-    for (const o of v.observations)
-      projected.push(
-        dot(
-          o.bearing,
-          o.label === selected ? "#f1c28b" : "#c9f5ed",
-          o.label,
-          o.label === selected ? 5 : 3,
-        ),
-      );
-    ctx.fillStyle = "#73859d";
-    ctx.font = '12px "DM Sans"';
-    ctx.fillText("DEPTH UNRESOLVED", 24, h - 95);
-  } else {
-    if (v.calibration) {
-      for (const o of v.observations) {
-        const local = V.scale(o.bearing, o.range),
-          world = V.add(
-            v.calibration.position,
-            v.calibration.orientation.map((row) => V.dot(row, local)),
-          );
-        const p = dot(
-          world,
-          o.label === selected ? "#f1c28b" : "#74929e",
-          o.label === selected ? o.label : "",
-          o.label === selected ? 4 : 2,
-        );
-        projected.push({ ...p, label: o.label });
-      }
-      if (!preview) {
-        dot([0, 0, 0], "#f1c28b", "HOME", 6);
-        line([v.position, [0, 0, 0]], "#698e9360", 1, [4, 6]);
-      }
-      dot(v.source, "#eaae77", "LOCAL ATTRACTION", 6);
-      if (v.report) {
-        dot(v.report.position, "#b7a5df", "ASTEROID", 5);
-        line([v.report.corridor, v.report.position], "#b7a5df", 3);
-      }
-    }
-    dot(center, "#ffffff", "SHIP", 4);
-    if (preview) {
-      line(preview.current.path, "#eabd8b", 2);
-      line(preview.gravityOnly.path, "#7a9dd5", 1.5, [5, 5]);
-      line(preview.proposed.path, "#9cead9", 2.5);
-      ctx.fillStyle = "#9aafc5";
-      ctx.font = '13px "DM Sans"';
-      ctx.fillText(
-        `${fmt(preview.years)}-year projection · identical starting position and velocity`,
-        24,
-        h - 95,
-      );
-    } else if (v.target) line([v.position, v.target.p], "#9cead9", 2);
-  }
-}
-let drag = null;
-canvas.onpointerdown = (e) => {
-  drag = { x: e.clientX, y: e.clientY, moved: false };
-  canvas.setPointerCapture(e.pointerId);
-};
-canvas.onpointermove = (e) => {
-  if (!drag) return;
-  const dx = e.clientX - drag.x,
-    dy = e.clientY - drag.y;
-  if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true;
-  yaw += dx * 0.006;
-  pitch = Math.max(-1.4, Math.min(1.4, pitch + dy * 0.006));
-  drag.x = e.clientX;
-  drag.y = e.clientY;
-  draw();
-};
-canvas.onpointerup = (e) => {
-  if (drag && !drag.moved) {
-    const r = canvas.getBoundingClientRect(),
-      x = e.clientX - r.left,
-      y = e.clientY - r.top,
-      p = projected.find((p) => Math.hypot(p.x - x, p.y - y) < 22);
-    if (p) {
-      selected = p.label;
-      render();
-    }
-  }
-  drag = null;
-};
-canvas.onwheel = (e) => {
-  e.preventDefault();
-  zoom = Math.max(0.3, Math.min(8, zoom * Math.exp(-e.deltaY * 0.001)));
-  draw();
-};
-canvas.onkeydown = (e) => {
-  if (
-    ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "+", "-"].includes(
-      e.key,
-    )
-  ) {
-    e.preventDefault();
-    yaw += e.key === "ArrowRight" ? 0.1 : e.key === "ArrowLeft" ? -0.1 : 0;
-    pitch += e.key === "ArrowUp" ? 0.1 : e.key === "ArrowDown" ? -0.1 : 0;
-    zoom *= e.key === "+" ? 1.1 : e.key === "-" ? 0.9 : 1;
-    draw();
-  }
-};
-$("#view-map").onclick = () => {
-  yaw = 0.25;
-  pitch = 0.3;
-  zoom = 1;
-  draw();
-};
-new ResizeObserver(draw).observe(canvas);
-render();
+
+function selectBrightLight(){setMode('select');const token=scene.visibleLight();if(token)selectLight(token);else say('Move view to find another ringed catalogue light.','SELECT A LIGHT');}
+$('#investigate-stop').onclick=()=>{pause(true);try{syncBudget();commitReviewed(game.quote('survey'),{source:'human',investigation:true});render();helpPlan('I paid for the asteroid report. Evaluate mining against my current field preview and priorities, including full detour, extraction, onward flight and braking. Recommend a stop only if justified; otherwise explain why we should skip it. Keep this in Plan.');}catch(e){fail(e);}};
+if(!replayChapter){card({state:'HOME DIRECTION UNKNOWN',title:'Which light is that?',description:'Select a ringed light to investigate.',actions:[['Select a bright light',selectBrightLight]],evidence:'Rings mark selectable catalogue stars. Background dust is decorative. Selection is free; identification costs one credit.'});setMode('select');render();}
