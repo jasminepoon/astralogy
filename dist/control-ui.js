@@ -29,7 +29,7 @@ export function syncControls({view:v,delegated,request,pending,accepted,quote,ed
  $('#driver-status').textContent=arrived?'Arrival verified.':pending?'Revising your quote…':busy?'Live Astra is considering…':editing?'You are shaping the field.':!active&&delegated?(error?'Paused · needs a change':'Paused · you have the helm'):active?'Driving within your budget.':'You have the helm.';
  for(const el of document.querySelectorAll('#less-fuel,[data-action="less-fuel"]'))button(el,pending?'Revising…':accepted&&!error?'Less fuel selected':'Use less fuel',{variant:'outline',icon:pending?'SpinnerGap':accepted&&!error?'Check':'SlidersHorizontal',busy:pending,pressed:accepted&&!pending&&!error,disabled:pending||arrived||(accepted&&!error)});
  $('#chat-form button[type=submit]').disabled=busy||arrived;$('#message').disabled=arrived;$('#skip-stop').disabled=arrived;
- for(const el of document.querySelectorAll('[data-action="apply"]')){el.disabled=busy||pending;el.hidden=active||busy;el.classList.remove('control-primary');el.classList.add('control-outline');}
+ for(const el of document.querySelectorAll('[data-action="apply"]')){el.disabled=busy||pending;el.hidden=false;el.classList.remove('control-primary');el.classList.add('control-outline');}
  $('#journey-map').setAttribute('aria-label',v.target?'Ship in computed flight. Use Move view to rotate the camera.':quote?.kind.startsWith('gravity-')?'Gravity proposal. Drag the separate glowing Bend gravity handle to change the field, route and cost. Release applies the displayed field.':'Preview a push. Drag outward from the ship; direction and length set a free impulse preview. Move view rotates the camera.');
  $('#gravity-handle').setAttribute('aria-busy',String(document.body.classList.contains('handle-busy')));
 }

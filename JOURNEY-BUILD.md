@@ -8,7 +8,7 @@ Run `python3 server.py` in this checkout. `STELLAR_PORT` overrides the default 4
 
 1. Choose **Preview a push**, then drag outward from the ship to retain a free, bounded vector impulse preview. No home direction or source identity is available before calibration.
 2. Select **Get us home. You drive.** The visible caps are 35 fuel, 15 fictional credits, 550 simulated years. Astra performs the six-credit calibration and proposes a direct-home gravity edit.
-3. During its twelve-second preview select **Use less fuel**. The shared handle and route change, with fuel and ETA shown before and after. The original human stroke remains a same-state reference.
+3. During its twenty-second preview select **Use less fuel**. The shared handle and route change, with fuel and ETA shown before and after. The original human stroke remains a same-state reference.
 4. Astra visibly moves and releases the same handle available to the human. The ship then travels under the edited force, coasts after expiry, and explicitly brakes. Arrival requires both position and speed checks.
 5. **Interrupt** invalidates pending replies and actions. **Undo field edit** restores the complete pre-field physical state, ledger, resources and time, then pauses. **Reset same sky** starts again.
 
@@ -41,3 +41,11 @@ Integrated browser checks: a live revised route completed at the expected 471.5 
 The 1280×720 inspection found and corrected clipped quote metrics; compact cards retain fuel, ETA and the binding constraint. The 390×844 layout and reduced-motion ready state were rendered and inspected. Narrow field labels were adjusted to avoid the home label and viewport edge. Local diagnostic images are in `output/playwright/` (ignored by git). Full-scenario Undo restored 35 fuel, 9 credits and 550 years after the field journey, retaining the paid calibration. Arrival artwork is removed immediately by Undo/reset.
 
 Final rehearsal and independent adverse/recovery checks are coordinated against the committed integrated build; their final evidence is maintained by the rehearsal task. The AI-only leaderboard remains a documented future stretch; no benchmark or leaderboard was built.
+
+## Proposal readability refinements
+
+The initial and accepted revised field proposals each receive a fresh 20-second interruptible inspection interval after the complete quote renders. A single `#less-fuel` control moves between the companion area and the active proposal; it is not duplicated. Its real request handler cancels pending commitment immediately, and pending/accepted states follow supported quotes. Manual Apply remains available to execute earlier within the existing delegation.
+
+Astra moves the actual shared field handle over three seconds. Early force integration advances at 0.75-second presentation checkpoints before faster inertial travel; reduced-motion mode skips the handle animation and keeps explicit half-second physical checkpoints. These waits change presentation only; simulated time, force, costs, expiry and braking are unchanged.
+
+Focused live verification waited fourteen seconds on the original rendered proposal, confirmed a single adjacent revision action and unchanged 35 fuel, requested a revision, verified the pending control disabled repeated input, and observed a fresh 20-second lower-cost proposal with fuel still unspent. Screenshots: `output/playwright/readable-20s-proposal.png` and `readable-20s-revised.png`. A final compact spacing adjustment keeps the full action row visible. Human Apply now also invalidates the old delegated countdown before committing its freshly quoted field.

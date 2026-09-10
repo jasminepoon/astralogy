@@ -47,9 +47,12 @@ body:not(.arrived) #arrival-plate{transition:none}
  #outcome-metrics{order:3;gap:8px;margin:8px 0 10px}#outcome-metrics strong{font-size:13px;line-height:1.4}#outcome-metrics small{font-size:9px;margin-bottom:2px}
  #quote-constraint{order:4;font-size:9px;padding:6px 8px;margin-bottom:7px}
  #execution-notice{order:5;margin:0 0 7px;font-size:9px}
- #outcome-actions{order:6}#outcome-actions [data-action=less-fuel]{display:none}
+ #outcome-actions{order:6}#outcome-actions [data-action=less-fuel]{display:inline-flex}
  #outcome-details{order:7;margin-top:5px}#outcome-details summary{min-height:26px;padding:6px 0}
 }
-body[data-journey-state=proposal] #outcome-actions [data-action=apply],body[data-journey-state=revising] #outcome-actions [data-action=apply]{display:none}
+
 
 @media(max-width:700px){#handle-hint{max-width:calc(100% - 48px);font-size:12px}#handle-hint small{font-size:11px}}
+
+#outcome-actions .control{flex:1 1 0;min-width:0;white-space:normal}
+@media(min-width:701px) and (max-height:820px){#outcome-card{max-height:calc(100% - 422px)}#budget-panel{padding-top:14px;padding-bottom:14px}#outcome-actions{flex-shrink:0}}
