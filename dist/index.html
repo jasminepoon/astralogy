@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#080b16" />
+    <meta
+      name="description"
+      content="Explore a real sky, paint with starlight, and experiment with stellar gravity."
+    />
+    <title>Stellar Atelier — A sky to play in</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <canvas
+      id="universe"
+      aria-label="Interactive three-dimensional star field"
+      tabindex="0"
+    ></canvas>
+    <div id="labels" aria-hidden="true"></div>
+    <header>
+      <a class="brand" href="./"
+        ><span class="brand-mark">✳</span
+        ><span
+          >STELLAR <b>ATELIER</b><small>AN EXPERIMENT IN WONDER</small></span
+        ></a
+      >
+      <nav aria-label="Experience">
+        <button id="sky-tab" class="tab active">
+          01 <span>Observatory</span></button
+        ><button id="lab-tab" class="tab">
+          02 <span>Stellar studio</span>
+        </button>
+      </nav>
+      <button
+        id="about-btn"
+        class="icon-button"
+        aria-label="About the simulation"
+      >
+        ?
+      </button>
+    </header>
+    <button id="controls-toggle" class="secondary" aria-expanded="false">
+      Controls ☷
+    </button>
+    <aside id="sky-panel" class="panel left-panel">
+      <p class="eyebrow">YOUR WINDOW INTO THE UNIVERSE</p>
+      <h1>A sky to<br /><em>get lost in.</em></h1>
+      <p class="intro">
+        Every point of light has a story.<br />Choose a star. Make a little
+        space.
+      </p>
+      <label class="search-wrap"
+        ><span>⌕</span
+        ><input
+          id="search"
+          type="search"
+          placeholder="Find a star…"
+          aria-label="Find a star"
+      /></label>
+      <div id="star-list"></div>
+      <button id="more-stars" class="text-button">
+        Explore all named stars <span>↗</span>
+      </button>
+      <div class="sky-settings">
+        <label class="toggle-row"
+          ><input id="lines-toggle" type="checkbox" checked /> Constellation
+          lines</label
+        ><label class="toggle-row"
+          ><input id="horizon-toggle" type="checkbox" /> Show horizon</label
+        >
+      </div>
+    </aside>
+    <aside id="star-card" class="panel right-panel">
+      <p class="eyebrow">SELECTED STAR <span id="catalogue-id"></span></p>
+      <div class="star-heading">
+        <h2 id="star-name">Rigel</h2>
+        <span id="star-symbol">✦</span>
+      </div>
+      <p id="star-subtitle" class="muted">Orion · Blue supergiant</p>
+      <p id="star-story">
+        One of the brilliant anchors of Orion. A distant blue-white light at the
+        hunter’s foot.
+      </p>
+      <dl>
+        <div>
+          <dt>Brightness</dt>
+          <dd id="star-mag">0.18 <small>mag</small></dd>
+        </div>
+        <div>
+          <dt>Right ascension</dt>
+          <dd id="star-ra">05h 14m</dd>
+        </div>
+        <div>
+          <dt>Declination</dt>
+          <dd id="star-dec">−08.20°</dd>
+        </div>
+        <div>
+          <dt>Altitude now</dt>
+          <dd id="star-alt">—</dd>
+        </div>
+      </dl>
+      <a id="star-source" target="_blank" rel="noopener" class="source-link"
+        >Explore the science ↗</a
+      ><button id="enter-lab" class="primary">
+        Enter stellar studio <span>↗</span>
+      </button>
+      <p class="micro">Open a playful, separate experiment.</p>
+    </aside>
+    <aside id="lab-panel" class="panel left-panel hidden">
+      <p class="eyebrow">A LITTLE COSMIC CURIOSITY</p>
+      <h1>Make waves.<br /><em>Move worlds.</em></h1>
+      <p class="intro">
+        Drag through the dust. Leave a trace.<br />See where gravity takes it.
+      </p>
+      <div class="tool-group" aria-label="Studio tools">
+        <button id="brush-tool" class="tool active">
+          <span>〰</span> Paint</button
+        ><button id="orbit-tool" class="tool"><span>◎</span> Orbit</button>
+      </div>
+      <p class="eyebrow spacer">YOUR PALETTE</p>
+      <div id="palette">
+        <button
+          aria-label="Glacier blue"
+          data-color="0"
+          class="swatch selected"
+          style="--swatch: #85e9fa"
+        ></button
+        ><button
+          aria-label="Iris violet"
+          data-color="1"
+          class="swatch"
+          style="--swatch: #ab8bf6"
+        ></button
+        ><button
+          aria-label="Rose light"
+          data-color="2"
+          class="swatch"
+          style="--swatch: #f39abb"
+        ></button
+        ><button
+          aria-label="Solar gold"
+          data-color="3"
+          class="swatch"
+          style="--swatch: #f7c580"
+        ></button>
+      </div>
+      <label class="range-label" for="brush-size"
+        >Brush size <output id="brush-value">Medium</output></label
+      ><input
+        id="brush-size"
+        type="range"
+        min=".2"
+        max="1.2"
+        value=".6"
+        step=".1"
+      />
+      <div class="divider"></div>
+      <button id="companion-btn" class="secondary">
+        ＋ Add a companion star</button
+      ><label class="range-label" for="mass"
+        >Companion mass <output id="mass-value">0.6 M☉</output></label
+      ><input id="mass" type="range" min=".2" max="2" step=".1" value=".6" />
+      <p class="micro">
+        Starts in a circular orbit, 4 AU apart.<br />Changing mass starts a new
+        experiment.
+      </p>
+      <button id="reset-btn" class="text-button">↺ Reset experiment</button
+      ><button id="return-btn" class="text-button">← Return to your sky</button>
+    </aside>
+    <aside id="lab-card" class="panel right-panel hidden">
+      <p class="eyebrow">
+        EXPERIMENT · <span id="model-name">SUN-LIKE MODEL</span>
+      </p>
+      <h2>Gravity, <br /><em>in motion.</em></h2>
+      <p class="muted">Inspired by <span id="inspiration">Rigel</span></p>
+      <dl>
+        <div>
+          <dt>Primary mass</dt>
+          <dd>1.0 <small>M☉</small></dd>
+        </div>
+        <div>
+          <dt>Companion</dt>
+          <dd id="companion-state">Not added</dd>
+        </div>
+        <div>
+          <dt>Separation</dt>
+          <dd id="separation">—</dd>
+        </div>
+        <div>
+          <dt>Orbital period</dt>
+          <dd id="period">—</dd>
+        </div>
+      </dl>
+      <div class="note">
+        <span>✧</span>
+        <p>
+          The motion follows gravity.<br />The luminous dust is your canvas.
+        </p>
+      </div>
+      <button id="physics-btn" class="text-button">How this works ↗</button>
+      <p class="micro">
+        Illustrative star size · artistic tracers<br />Model properties are not
+        those of the selected star.
+      </p>
+    </aside>
+    <div id="view-caption">
+      <span id="view-title">ORION</span
+      ><small id="view-subtitle">THE HUNTER</small>
+    </div>
+    <footer id="sky-time" class="time-bar">
+      <button id="sky-back" class="icon-button" aria-label="One hour earlier">
+        −
+      </button>
+      <div>
+        <label for="moment">OBSERVATION TIME · UTC</label
+        ><input
+          id="moment"
+          type="datetime-local"
+          value="2000-01-16T03:00"
+          min="1900-01-01T00:00"
+          max="2100-12-31T23:59"
+        />
+      </div>
+      <button id="sky-forward" class="icon-button" aria-label="One hour later">
+        ＋</button
+      ><span class="bar-divider"></span>
+      <div class="location-fields">
+        <label
+          >LATITUDE
+          <input
+            id="latitude"
+            aria-label="Latitude"
+            type="number"
+            min="-90"
+            max="90"
+            step=".0001"
+            value="40.7128" /></label
+        ><label
+          >LONGITUDE
+          <input
+            id="longitude"
+            aria-label="Longitude"
+            type="number"
+            min="-180"
+            max="180"
+            step=".0001"
+            value="-74.0060"
+        /></label>
+      </div>
+      <button id="restore-sky" class="text-button">↺ Demo moment</button>
+    </footer>
+    <footer id="lab-time" class="time-bar hidden">
+      <button id="play-btn" class="play-button" aria-label="Pause experiment">
+        Ⅱ
+      </button>
+      <div class="time-readout">
+        <label>EXPERIMENT TIME</label
+        ><strong id="elapsed">0.00 <small>years</small></strong>
+      </div>
+      <input
+        id="timeline"
+        aria-label="Experiment timeline"
+        type="range"
+        min="0"
+        max="30"
+        step=".01"
+        value="0"
+      /><select id="speed" aria-label="Simulation speed">
+        <option value=".15">0.15 yr / sec</option>
+        <option value=".5" selected>0.5 yr / sec</option>
+        <option value="2">2 yr / sec</option></select
+      ><button id="save-btn" class="text-button">Save moment ↗</button
+      ><button id="load-btn" class="text-button">Load</button>
+    </footer>
+    <div class="bottom-note">
+      <span id="controls-hint"
+        >DRAG TO LOOK AROUND <span>·</span> SCROLL TO ZOOM</span
+      ><span id="status">Loading real stars…</span>
+    </div>
+    <div id="toast" role="status"></div>
+    <dialog id="about">
+      <button
+        id="close-about"
+        class="icon-button close"
+        aria-label="Close information"
+      >
+        ×
+      </button>
+      <p class="eyebrow">BEHIND THE WONDER</p>
+      <h2>A real sky.<br /><em>A space to experiment.</em></h2>
+      <p>
+        The observatory uses 5,044 catalogue stars with J2000 coordinates,
+        transformed for your date and location. This prototype includes
+        precession and nutation, but omits stellar proper motion, aberration,
+        and atmospheric refraction. It is an educational sky view, not a
+        precision ephemeris.
+      </p>
+      <p>
+        The studio starts with a 1-solar-mass model. Add a companion to explore
+        Newtonian gravity. Luminous tracers are an artistic material, not a
+        plasma simulation. Painted trails are cleared when you move the time
+        slider; body motion is replayed deterministically.
+      </p>
+      <p>
+        Fusion powers ordinary stars. Fusion experiments, chart imports, and
+        full stellar evolution are planned; this version explores gravity and
+        motion.
+      </p>
+      <p class="micro">
+        References:
+        <a
+          href="https://github.com/ofrohn/d3-celestial"
+          target="_blank"
+          rel="noopener"
+          >D3 Celestial</a
+        >
+        ·
+        <a
+          href="https://github.com/cosinekitty/astronomy"
+          target="_blank"
+          rel="noopener"
+          >Astronomy Engine</a
+        >
+        ·
+        <a
+          href="https://science.nasa.gov/universe/stars/"
+          target="_blank"
+          rel="noopener"
+          >NASA</a
+        >
+        ·
+        <a
+          href="https://developers.openai.com/blog/how-to-build-games-with-astra"
+          target="_blank"
+          rel="noopener"
+          >Thomas Ricouard’s implementations</a
+        >
+      </p>
+    </dialog>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
