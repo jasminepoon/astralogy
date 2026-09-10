@@ -1,3 +1,7 @@
+# Latest: Astra-led journey home
+
+The local root now opens the playable calibration-to-arrival journey. See [JOURNEY-BUILD.md](JOURNEY-BUILD.md) for the three-minute demo, controls, model rules and validation. The complete original observatory and orbital studio remain at `/atelier.html`. Run `python3 server.py` and open http://localhost:4173. This existing-Site edit has not been deployed.
+
 # Stellar Atelier
 
 A browser sky explorer and painterly stellar sandbox, built with Three.js.
